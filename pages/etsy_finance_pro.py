@@ -20,35 +20,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
 from data_collection.collector import show_data_opt_in, collect_data_if_consent
 
-
-"""
-# pages/1_💰_Finance_Pro.py (modification minimale)
-
-import streamlit as st
-from data_collection.collector import show_data_opt_in, collect_data_if_consent
-
-st.title("💰 Finance Pro Dashboard")
-
-# Upload CSV
-uploaded_file = st.file_uploader("📂 Importer vos ventes Etsy", type=['csv'])
-
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    
-    # NOUVEAU : Affiche opt-in au premier upload
-    show_data_opt_in()
-    
-    # Votre code d'analyse existant
-    # ... (inchangé)
-    
-    # NOUVEAU : Collecte si consentement
-    if st.session_state.get('consent_asked', False):
-        collect_data_if_consent(df, user_info['email'])
-"""
-
-
-
-
 # Configuration de la page
 st.set_page_config(
     page_title="Etsy Analytics Pro - Bijoux",
