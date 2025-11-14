@@ -10,6 +10,15 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+import sys
+import os
+
+# Ajouter le chemin parent pour les imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# NOUVEAUX IMPORTS
+from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
+from data_collection.collector import show_data_opt_in, collect_data_if_consent
 
 
 """
@@ -47,6 +56,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ========== NOUVEAU : VÉRIFICATION D'ACCÈS ==========
+user_info = check_access()
+
+# Vérifier l'accès à ce dashboard spécifique
+if not has_access_to_dashboard(user_info['access_key'], 'finance_pro'):
+    show_upgrade_message('finance_pro', user_info['product'])
+    st.stop()
+# ====================================================
 
 # Styles CSS personnalisés
 st.markdown("""
@@ -741,6 +759,12 @@ else:
     df = load_data(uploaded_file)
     
     if df is not None:
+
+        # ========== NOUVEAU : POP-UP OPT-IN ==========
+        # Afficher le pop-up au premier upload
+        show_data_opt_in(user_info['email'])
+        # ============================================
+
         # Appliquer la méthode de coûts choisie
         if cost_method == "Coût moyen par produit":
             df['Cost'] = avg_cost
@@ -789,6 +813,12 @@ else:
         
         # Calcul des KPIs avec configuration des frais Etsy
         kpis = calculate_kpis(df, etsy_fees_config)
+
+        # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
+        # Collecter si l'utilisateur a donné son consentement
+        if st.session_state.get('consent_asked', False):
+            collect_data_if_consent(df, user_info['email'], 'finance_pro')
+        # ===================================================
         
         # Onglets principaux
         tab1, tab2, tab3, tab4 = st.tabs([

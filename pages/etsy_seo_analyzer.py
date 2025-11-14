@@ -12,6 +12,15 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+import sys
+import os
+
+# Ajouter le chemin parent pour les imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# NOUVEAUX IMPORTS
+from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
+from data_collection.collector import show_data_opt_in, collect_data_if_consent
 
 # Configuration de la page
 st.set_page_config(
@@ -20,6 +29,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ========== NOUVEAU : VÉRIFICATION D'ACCÈS ==========
+user_info = check_access()
+
+# Vérifier l'accès à ce dashboard spécifique
+if not has_access_to_dashboard(user_info['access_key'], 'seo_analyzer'):
+    show_upgrade_message('seo_analyzer', user_info['product'])
+    st.stop()
+# ====================================================
 
 # Styles CSS personnalisés
 st.markdown("""
@@ -402,6 +420,11 @@ with st.sidebar:
 
 # Corps principal
 if listings_file is None:
+
+    # ========== NOUVEAU : POP-UP OPT-IN ==========
+    show_data_opt_in(user_info['email'])
+    # ============================================
+
     # Page d'accueil
     st.info("👆 Commencez par importer votre fichier de listings Etsy dans la barre latérale")
     
@@ -495,6 +518,11 @@ else:
                 )
                 seo_analysis['Sales_Count'] = seo_analysis['Sales_Count'].fillna(0)
                 seo_analysis['Revenue'] = seo_analysis['Revenue'].fillna(0)
+
+        # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
+        if st.session_state.get('consent_asked', False):
+            collect_data_if_consent(listings_df, user_info['email'], 'seo_analyzer')
+        # ===================================================
         
         # Onglets
         tab1, tab2, tab3, tab4, tab5 = st.tabs([

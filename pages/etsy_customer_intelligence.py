@@ -13,6 +13,15 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+import sys
+import os
+
+# Ajouter le chemin parent pour les imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# NOUVEAUX IMPORTS
+from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
+from data_collection.collector import show_data_opt_in, collect_data_if_consent
 
 # Configuration de la page
 st.set_page_config(
@@ -21,6 +30,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ========== NOUVEAU : VÉRIFICATION D'ACCÈS ==========
+user_info = check_access()
+
+# Vérifier l'accès à ce dashboard spécifique
+if not has_access_to_dashboard(user_info['access_key'], 'customer_intelligence'):
+    show_upgrade_message('customer_intelligence', user_info['product'])
+    st.stop()
+# ====================================================
 
 # Styles CSS personnalisés
 st.markdown("""
@@ -524,6 +542,11 @@ with st.sidebar:
 
 # Corps principal
 if orders_file is None:
+
+    # ========== NOUVEAU : POP-UP OPT-IN ==========
+    show_data_opt_in(user_info['email'])
+    # ============================================
+
     # Page d'accueil
     st.info("👆 Commencez par importer vos fichiers CSV Etsy dans la barre latérale")
     
@@ -608,6 +631,11 @@ else:
         if reviews_df is not None:
             positive_words, negative_words = analyze_reviews_sentiment(reviews_df)
             all_words = extract_all_words(reviews_df)
+
+        # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
+        if st.session_state.get('consent_asked', False):
+            collect_data_if_consent(orders_df, user_info['email'], 'customer_intelligence')
+        # ===================================================
         
         # Onglets
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
