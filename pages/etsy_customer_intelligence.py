@@ -21,7 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # NOUVEAUX IMPORTS
 from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
-from data_collection.collector import show_data_opt_in, collect_data_if_consent
+from data_collection.collector import show_data_opt_in
 
 # Configuration de la page
 st.set_page_config(
@@ -634,7 +634,25 @@ else:
 
         # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
         if st.session_state.get('consent_asked', False):
-            collect_data_if_consent(orders_df, user_info['email'], 'customer_intelligence')
+    # Récupérer TOUS les fichiers uploadés
+            all_files = {}
+            
+            # Fichier orders (principal)
+            if orders_file is not None:
+                all_files['orders'] = orders_file
+            
+            # Fichier items (optionnel)
+            if items_file is not None:
+                all_files['items'] = items_file
+            
+            # Fichier reviews (optionnel)
+            if reviews_file is not None:
+                all_files['reviews'] = reviews_file
+            
+            # Collecter
+            from data_collection.collector import collect_raw_data
+            if all_files:  # Seulement si on a des fichiers
+                collect_raw_data(all_files, user_info['email'], 'customer_intelligence')
         # ===================================================
         
         # Onglets
