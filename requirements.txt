@@ -1,5 +1,5 @@
 # Streamlit - Framework web
-streamlit==1.31.0
+streamlit==1.37.0
 
 # Data manipulation
 pandas==2.2.0
