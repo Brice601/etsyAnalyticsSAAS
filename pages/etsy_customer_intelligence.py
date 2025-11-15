@@ -690,7 +690,7 @@ else:
                         title="Chiffre d'affaires par pays"
                     )
                     fig.update_layout(height=500)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.markdown("### 🏆 Top 10 Pays par CA")
@@ -708,7 +708,7 @@ else:
                     )
                     fig.update_traces(texttemplate='%{text:.2f}€', textposition='outside')
                     fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 # Top villes
                 if city_analysis is not None:
@@ -726,7 +726,7 @@ else:
                     )
                     fig.update_traces(texttemplate='%{text}', textposition='outside')
                     fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 # Tableau détaillé par pays
                 st.markdown("---")
@@ -738,7 +738,7 @@ else:
                 
                 st.dataframe(
                     display_country,
-                    width='stretch',
+                    use_container_width=True,
                     column_config={
                         "Country": "Pays",
                         "Orders": "Commandes",
@@ -792,7 +792,7 @@ else:
                     )
                     fig.update_traces(textposition='outside')
                     fig.update_layout(height=400, showlegend=False)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.markdown("### 📈 Évolution de la Note Moyenne")
@@ -809,7 +809,7 @@ else:
                     )
                     fig.update_traces(line_color='#F56400', line_width=3)
                     fig.update_layout(height=400, yaxis_range=[0, 5])
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 # Analyse de sentiment
                 if positive_words and negative_words:
@@ -833,7 +833,7 @@ else:
                             )
                             fig.update_traces(textposition='outside')
                             fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'}, showlegend=False)
-                            st.plotly_chart(fig, width='stretch')
+                            st.plotly_chart(fig, use_container_width=True)
                         else:
                             st.info("Aucun mot-clé positif détecté")
                     
@@ -853,7 +853,7 @@ else:
                             )
                             fig.update_traces(textposition='outside')
                             fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'}, showlegend=False)
-                            st.plotly_chart(fig, width='stretch')
+                            st.plotly_chart(fig, use_container_width=True)
                         else:
                             st.success("✅ Aucun mot-clé négatif détecté !")
                 
@@ -887,7 +887,7 @@ else:
                         xaxis={'visible': False},
                         yaxis={'visible': False}
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 # Avis récents négatifs
                 negative_reviews_df = reviews_df[reviews_df['Rating'] <= 2].sort_values('Date', ascending=False)
@@ -950,7 +950,7 @@ else:
                         yaxis_title="Nombre de commandes",
                         height=400
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.markdown("### 🌍 Délai Moyen par Pays")
@@ -969,7 +969,7 @@ else:
                         )
                         fig.update_traces(texttemplate='%{text:.1f}j', textposition='outside')
                         fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True)
             
             # Saisonnalité
             if 'Date' in orders_df.columns:
@@ -997,7 +997,7 @@ else:
                     )
                     fig.update_traces(textposition='outside')
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.markdown("### 📊 Ventes par Jour de la Semaine")
@@ -1019,7 +1019,7 @@ else:
                     )
                     fig.update_traces(textposition='outside')
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 # Meilleur jour
                 best_day_idx = daily_orders['Orders'].idxmax()
@@ -1051,7 +1051,7 @@ else:
                 )
                 fig.update_traces(texttemplate='%{text:.2f}€', textposition='outside')
                 fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
         
         with tab4:
             st.markdown("## 🔄 Fidélisation & Lifetime Value")
@@ -1101,7 +1101,7 @@ else:
                         color_discrete_sequence=['#ffc107', '#28a745']
                     )
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.markdown("### 📊 Distribution du Nombre d'Achats")
@@ -1118,7 +1118,7 @@ else:
                     )
                     fig.update_traces(textposition='outside')
                     fig.update_layout(height=400, showlegend=False)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 # Lifetime Value
                 st.markdown("---")
@@ -1140,7 +1140,7 @@ else:
                         yaxis_title="Nombre de clients",
                         height=400
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.markdown("### ⏱️ Délai Entre Deux Achats")
@@ -1160,7 +1160,7 @@ else:
                             yaxis_title="Nombre de clients",
                             height=400
                         )
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True)
                         
                         avg_days_between = repeat_customers_df['Days_Between_Orders'].mean()
                         
@@ -1194,7 +1194,7 @@ else:
                 )
                 fig.update_traces(texttemplate='%{text:.2f}€', textposition='outside')
                 fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
                 
                 # Clients à risque
                 churn_risk_df = customer_analysis[customer_analysis['Churn_Risk'] == True].nlargest(10, 'LTV')
@@ -1221,7 +1221,7 @@ else:
                     display_churn = churn_risk_df[['Buyer_Display', 'Num_Orders', 'LTV', 'Days_Since_Last']].copy()
                     display_churn.columns = ['Client', 'Achats', 'LTV (€)', 'Jours depuis dernier achat']
                     
-                    st.dataframe(display_churn, width='stretch')
+                    st.dataframe(display_churn, use_container_width=True)
         
         with tab5:
             st.markdown("## 📧 Recommandations Marketing Personnalisées")
@@ -1437,7 +1437,7 @@ else:
         st.markdown("---")
         st.markdown("## 📄 Exporter le Rapport")
         
-        if st.button("📥 Générer le Rapport PDF", type="primary", width='stretch'):
+        if st.button("📥 Générer le Rapport PDF", type="primary", use_container_width=True):
             with st.spinner("Génération du rapport en cours..."):
                 pdf_buffer = generate_customer_intelligence_pdf(orders_df, reviews_df, customer_analysis)
                 
@@ -1446,7 +1446,7 @@ else:
                     data=pdf_buffer,
                     file_name=f"rapport_customer_intelligence_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    width='stretch'
+                    use_container_width=True
                 )
                 
                 st.success("✅ Rapport généré avec succès !")

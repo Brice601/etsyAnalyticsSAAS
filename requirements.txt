@@ -1,8 +1,26 @@
+# Streamlit - Framework web
 streamlit==1.31.0
+
+# Data manipulation
 pandas==2.2.0
 numpy==1.26.3
+
+# Visualisation
 plotly==5.18.0
+
+# Excel/CSV handling
 openpyxl==3.1.2
+
+# Images
 Pillow==10.2.0
+
+# PDF generation
 reportlab==4.0.9
+
+# Machine Learning (for future AI features)
 scikit-learn==1.4.0
+
+# Future integrations (commented for now)
+# stripe==7.0.0
+# supabase==2.0.0
+# resend==0.7.0

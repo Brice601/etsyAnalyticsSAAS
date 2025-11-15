@@ -1,0 +1,22 @@
+{
+  "ABC123": {
+    "email": "demo@starter.com",
+    "product": "starter",
+    "consent": false
+  },
+  "ABC124": {
+    "email": "demo2@starter.com",
+    "product": "starter",
+    "consent": true
+  },
+  "XYZ789": {
+    "email": "demo@bundle.com",
+    "product": "bundle",
+    "consent": true
+  },
+  "TEST01": {
+    "email": "test@premium.com",
+    "product": "bundle",
+    "consent": true
+  }
+}

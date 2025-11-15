@@ -1,0 +1,18 @@
+{
+  "user_id": "7e6285acd3af4b1389cc2c3d4e35cf3af7c2bdb6f11bbe89dbe81b4446116db6",
+  "dashboard": "seo_analyzer",
+  "collected_at": "2025-11-15T08:50:08.866260",
+  "metrics": {
+    "num_listings": 3,
+    "avg_price": 21.706666666666663,
+    "avg_title_length": 98.33333333333333,
+    "price_ranges": {
+      "0-20": 2,
+      "20-50": 1,
+      "50-100": 0,
+      "100+": 0
+    },
+    "avg_num_images": 9.666666666666666,
+    "category_distribution": {}
+  }
+}

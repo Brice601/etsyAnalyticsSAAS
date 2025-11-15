@@ -455,7 +455,7 @@ if listings_file is None:
         'Nb photos': [10, 7, 3]
     })
     
-    st.dataframe(example_data, width='stretch')
+    st.dataframe(example_data, use_container_width=True)
     
     st.markdown("### 🎁 Ce que vous obtiendrez")
     
@@ -579,7 +579,7 @@ else:
                     yaxis_title="Nombre de listings",
                     height=400
                 )
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             with col2:
                 st.markdown("### 🎯 Répartition par catégorie")
@@ -597,7 +597,7 @@ else:
                     color_discrete_sequence=['#dc3545', '#ffc107', '#28a745', "#ff6e0d"]
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             # Tableau des listings
             st.markdown("### 📋 Tous vos listings avec score SEO")
@@ -608,7 +608,7 @@ else:
             
             st.dataframe(
                 display_df,
-                width='stretch',
+                use_container_width=True,
                 column_config={
                     "Title": "Titre du listing",
                     "SEO_Score": "Score SEO",
@@ -655,7 +655,7 @@ else:
                 fig.add_vline(x=140, line_dash="dash", line_color="red",
                              annotation_text="Max Etsy (140)")
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             with col2:
                 st.markdown("### 🎯 Corrélation longueur ↔ Score SEO")
@@ -670,7 +670,7 @@ else:
                     labels={'x': 'Longueur titre (caractères)', 'y': 'Score SEO'}
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             st.markdown("---")
             
@@ -737,7 +737,7 @@ else:
                         color_continuous_scale='Blues'
                     )
                     fig.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     st.markdown("### 📊 Statistiques des tags")
@@ -778,7 +778,7 @@ else:
                         'Tags': ', '.join(tags[:5]) + ('...' if len(tags) > 5 else '')
                     })
                 
-                st.dataframe(pd.DataFrame(tags_by_listing), width='stretch')
+                st.dataframe(pd.DataFrame(tags_by_listing), use_container_width=True)
             
             else:
                 st.warning("⚠️ Aucun tag trouvé dans vos listings. Ajoutez des tags pour améliorer votre SEO !")
@@ -806,7 +806,7 @@ else:
                         labels={'Sales_Count': 'Nombre de ventes', 'SEO_Score': 'Score SEO'}
                     )
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     # Best-sellers vs non-vendeurs
@@ -833,7 +833,7 @@ else:
                     )
                     fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 st.markdown("---")
                 
@@ -855,7 +855,7 @@ else:
                         labels={'Num_Images': 'Nombre de photos', 'Sales_Count': 'Ventes'}
                     )
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     # Stats photos
@@ -874,7 +874,7 @@ else:
                         labels={'Num_Images': 'Nombre de photos', 'Sales_Count': 'Total ventes'}
                     )
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 # Analyse temporelle
                 if 'Date' in sales_df.columns:
@@ -899,7 +899,7 @@ else:
                         color_continuous_scale='Oranges'
                     )
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                     
                     best_day_idx = daily_sales['CA'].idxmax()
                     best_day = daily_sales.loc[best_day_idx, 'Jour']
@@ -1078,7 +1078,7 @@ else:
         st.markdown("---")
         st.markdown("## 📄 Exporter le Rapport SEO")
         
-        if st.button("📥 Générer le Rapport PDF", type="primary", width='stretch'):
+        if st.button("📥 Générer le Rapport PDF", type="primary", use_container_width=True):
             with st.spinner("Génération du rapport en cours..."):
                 pdf_buffer = generate_seo_pdf_report(listings_df, seo_analysis, sales_df)
                 
@@ -1087,7 +1087,7 @@ else:
                     data=pdf_buffer,
                     file_name=f"rapport_seo_etsy_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    width='stretch'
+                    use_container_width=True
                 )
                 
                 st.success("✅ Rapport généré avec succès !")
