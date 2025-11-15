@@ -715,7 +715,7 @@ if uploaded_file is None:
         'Item Price': [25.00, 18.50, 45.00],
         'Quantity': [1, 2, 1]
     })
-    st.dataframe(example_df, use_container_width=True)
+    st.dataframe(example_df, width='stretch')
     
     # Bouton pour télécharger un template
     st.download_button(
@@ -881,7 +881,7 @@ else:
                     totals={"marker": {"color": "#007bff"}}
                 ))
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             with col2:
                 st.markdown("### 📊 Répartition des revenus")
@@ -901,7 +901,7 @@ else:
                     color_discrete_sequence=['#28a745', '#F56400', '#ffc107']
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             # Détail des frais Etsy - NOUVEAU
             if kpis.get('frais_etsy_detail'):
@@ -933,7 +933,7 @@ else:
                     
                     if fees_data:
                         fees_df = pd.DataFrame(fees_data)
-                        st.dataframe(fees_df, use_container_width=True, hide_index=True)
+                        st.dataframe(fees_df, width='stretch', hide_index=True)
                     
                     # Total des frais
                     total_fees_pct = (kpis['frais_etsy'] / kpis['ca_total'] * 100) if kpis['ca_total'] > 0 else 0
@@ -954,7 +954,7 @@ else:
                             title="Répartition des frais"
                         )
                         fig.update_layout(height=300, showlegend=False)
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
             
             # Alerte si marge faible
             if kpis['taux_marge'] < 30:
@@ -988,7 +988,7 @@ else:
                     )
                     fig.update_traces(texttemplate='%{text:.2f}€', textposition='outside')
                     fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 
                 with col2:
                     st.markdown("### 📊 Top 10 produits par marge")
@@ -1005,7 +1005,7 @@ else:
                     )
                     fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
                     fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 
                 st.markdown("---")
                 st.markdown("### 📋 Tableau détaillé des produits")
@@ -1019,7 +1019,7 @@ else:
                 
                 st.dataframe(
                     display_df,
-                    use_container_width=True,
+                    width='stretch',
                     column_config={
                         "Product": "Produit",
                         "CA": "Chiffre d'affaires",
@@ -1057,7 +1057,7 @@ else:
                 )
                 fig.update_traces(line_color='#F56400', line_width=3)
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Évolution du nombre de ventes
                 daily_count = df.groupby(df['Date'].dt.date).size().reset_index()
@@ -1072,7 +1072,7 @@ else:
                     color_continuous_scale='Blues'
                 )
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Analyse jour de la semaine
                 df['DayOfWeek'] = df['Date'].dt.day_name()
@@ -1095,7 +1095,7 @@ else:
                         color_continuous_scale='Oranges'
                     )
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 
                 with col2:
                     if not weekly_sales.empty and weekly_sales['CA'].sum() > 0:
@@ -1241,7 +1241,7 @@ else:
         st.markdown("---")
         st.markdown("## 📄 Exporter le rapport")
         
-        if st.button("🔥 Générer le rapport PDF", type="primary", use_container_width=True):
+        if st.button("🔥 Générer le rapport PDF", type="primary", width='stretch'):
             with st.spinner("Génération du rapport en cours..."):
                 pdf_buffer = generate_pdf_report(kpis, df, product_analysis)
                 
@@ -1250,7 +1250,7 @@ else:
                     data=pdf_buffer,
                     file_name=f"rapport_etsy_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width='stretch'
                 )
                 
                 st.success("✅ Rapport généré avec succès !")
