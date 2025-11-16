@@ -1,11 +1,16 @@
 import streamlit as st
 from datetime import datetime
-from supabase import create_client, Client
+
+# 🔥 MODE DEBUG : Affiche les étapes de connexion
+DEBUG_MODE = True
 
 # Configuration des dashboards par produit
 DASHBOARD_ACCESS = {
     'starter': ['finance_pro'],
-    'bundle': ['finance_pro', 'customer_intelligence', 'seo_analyzer']
+    'bundle': ['finance_pro', 'customer_intelligence', 'seo_analyzer'],
+    'finance': ['finance_pro'],
+    'marketing': ['customer_intelligence'],
+    'operations': ['seo_analyzer']
 }
 
 # Noms lisibles des dashboards
@@ -15,21 +20,67 @@ DASHBOARD_NAMES = {
     'seo_analyzer': 'SEO Analyzer'
 }
 
-# Noms lisibles des produits
-PAYMENT_LINK_TO_PRODUCT = {
-    "plink_1STmBL5aDYuuRu2fzc3Z11mi": "finance",
-    "plink_1STmEV5aDYuuRu2fD77lDlxB": "marketing",
-    "plink_1STmGb5aDYuuRu2fNJQr5jP5": "operations",
-    "plink_1STmPj5aDYuuRu2fPw0IlvdB": "bundle"
-}
+
+def debug_log(message):
+    """Affiche un message de debug si DEBUG_MODE est activé"""
+    if DEBUG_MODE:
+        st.sidebar.info(f"🐛 DEBUG: {message}")
 
 
-def get_supabase_client() -> Client:
+def get_supabase_client():
     """Initialise et retourne le client Supabase"""
-    return create_client(
-        st.secrets["supabase"]["url"],
-        st.secrets["supabase"]["key"]
-    )
+    debug_log("Tentative de connexion à Supabase...")
+    
+    try:
+        # Vérifier que les secrets existent
+        if "supabase" not in st.secrets:
+            st.error("❌ Secrets Supabase non configurés dans Streamlit Cloud")
+            st.info("Allez dans Settings > Secrets et ajoutez :\n```toml\n[supabase]\nurl = \"...\"\nkey = \"...\"\n```")
+            debug_log("Secrets Supabase manquants")
+            return None
+        
+        debug_log("Secrets Supabase trouvés")
+        
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        
+        # Masquer la clé pour la sécurité
+        masked_key = key[:20] + "..." if len(key) > 20 else "***"
+        debug_log(f"URL: {url}")
+        debug_log(f"Key: {masked_key}")
+        
+        # Import Supabase
+        try:
+            from supabase import create_client
+            debug_log("Module supabase importé avec succès")
+        except ImportError as e:
+            st.error("❌ Module 'supabase' non trouvé")
+            st.info("Vérifiez que 'supabase>=2.7.0' est dans requirements.txt")
+            debug_log(f"Erreur import supabase: {e}")
+            return None
+        
+        # Créer le client
+        debug_log("Création du client Supabase...")
+        client = create_client(url, key)
+        debug_log("Client Supabase créé")
+        
+        # Test de connexion
+        debug_log("Test de connexion à la table customers...")
+        try:
+            test = client.table('customers').select('id').limit(1).execute()
+            debug_log(f"Connexion OK - {len(test.data)} ligne(s) trouvée(s)")
+            return client
+        except Exception as conn_error:
+            st.error(f"❌ Erreur de connexion à la table 'customers'")
+            st.code(str(conn_error))
+            debug_log(f"Erreur requête: {conn_error}")
+            return None
+        
+    except Exception as e:
+        st.error(f"❌ Erreur initialisation Supabase")
+        st.code(str(e))
+        debug_log(f"Erreur générale: {e}")
+        return None
 
 
 def check_access():
@@ -37,16 +88,21 @@ def check_access():
     Vérifie si l'utilisateur a un accès valide via la clé dans l'URL ou session_state.
     Retourne les informations utilisateur si valide, sinon arrête l'exécution.
     """
+    debug_log("=== DÉBUT CHECK_ACCESS ===")
+    
     # D'abord vérifier session_state (navigation interne)
     if 'access_key' in st.session_state and st.session_state['access_key']:
         access_key = st.session_state['access_key']
+        debug_log(f"Clé trouvée dans session_state: {access_key}")
     else:
         # Sinon récupérer le paramètre 'key' de l'URL (accès initial)
         params = st.query_params
         access_key = params.get("key", None)
+        debug_log(f"Clé trouvée dans URL: {access_key}")
     
     # Si pas de clé, afficher message d'erreur et arrêter
     if not access_key:
+        debug_log("Aucune clé d'accès fournie")
         st.error("❌ Accès non autorisé - Clé manquante")
         st.markdown("""
         ### 🔒 Accès réservé aux clients
@@ -58,33 +114,44 @@ def check_access():
         - Cliquez sur le lien d'accès unique fourni
         
         **Pas encore client ?**
-        - [Acheter le dashboard Finance pro - 29€](https://buy.stripe.com/test_00w7sEafuaTU9kU9fLgIo00)
-        - [Acheter le dashboard customer - 29€](https://buy.stripe.com/test_dRm14g9bq7HIeFegIdgIo01)
-        - [Acheter le dashboard seo - 29€](https://buy.stripe.com/test_14A6oA5Zee66cx663zgIo02)
-        - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/test_dRm3co5Ze6DEdBa9fLgIo04) ⭐ Recommandé
+        - [Acheter le dashboard Finance - 29€](https://buy.stripe.com/starter)
+        - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/bundle) ⭐ Recommandé
         
         ---
         
-        ✅ Accès immédiat après paiement  
-        ✅ 30 jours satisfait ou remboursé  
-        ✅ Support email inclus
+        **🧪 MODE TEST (si Make webhook fonctionne) :**
+        Ajoutez `?key=VOTRE_CLE` à l'URL
+        
+        Exemple : `https://votre-app.streamlit.app/?key=ABC123`
         """)
         st.stop()
     
     # Connexion Supabase
+    debug_log("Tentative de connexion à Supabase...")
+    supabase = get_supabase_client()
+    
+    if supabase is None:
+        st.error("❌ Impossible de se connecter à la base de données")
+        debug_log("Échec connexion Supabase")
+        st.stop()
+    
+    debug_log("Connexion Supabase OK")
+    
     try:
-        supabase = get_supabase_client()
-        
         # Requête pour vérifier la clé
+        debug_log(f"Recherche de la clé '{access_key}' dans la table customers...")
         response = supabase.table('customers').select('*').eq('access_key', access_key).execute()
+        
+        debug_log(f"Réponse Supabase: {len(response.data) if response.data else 0} résultat(s)")
         
         # Si pas de résultat
         if not response.data or len(response.data) == 0:
+            debug_log("Clé d'accès non trouvée dans la base")
             st.error("❌ Clé d'accès invalide")
-            st.markdown("""
+            st.markdown(f"""
             ### 🔒 Clé d'accès non reconnue
             
-            La clé d'accès fournie n'est pas valide ou a expiré.
+            La clé `{access_key}` n'est pas valide ou a expiré.
             
             **Solutions :**
             - Vérifiez que vous avez copié le lien complet depuis votre email
@@ -100,35 +167,56 @@ def check_access():
         user_info = response.data[0]
         user_info['access_key'] = access_key
         
+        debug_log(f"Utilisateur trouvé: {user_info.get('email')} - Produit: {user_info.get('product')}")
+        
         # Mettre à jour la dernière connexion
-        supabase.table('customers').update({
-            'last_login': datetime.now().isoformat()
-        }).eq('access_key', access_key).execute()
+        debug_log("Mise à jour last_login...")
+        try:
+            supabase.table('customers').update({
+                'last_login': datetime.now().isoformat()
+            }).eq('access_key', access_key).execute()
+            debug_log("last_login mis à jour")
+        except Exception as update_error:
+            debug_log(f"Erreur mise à jour last_login: {update_error}")
+            # Ne pas bloquer si la mise à jour échoue
         
         # Sauvegarder dans session_state
         st.session_state['access_key'] = access_key
         st.session_state['user_info'] = user_info
         
+        debug_log("=== CHECK_ACCESS TERMINÉ AVEC SUCCÈS ===")
+        
         return user_info
         
     except Exception as e:
-        st.error(f"❌ Erreur de connexion : {e}")
+        st.error(f"❌ Erreur de connexion")
+        st.code(str(e))
+        debug_log(f"Erreur dans check_access: {e}")
+        st.info("💡 Si le problème persiste, contactez le support : support@architecte-ia.fr")
         st.stop()
 
 
 def save_consent(email, consent_value):
-    """Sauvegarde le consentement de l'utilisateur dans Supabase"""
+    """Sauvegarde le consentement de l'utilisateur"""
+    debug_log(f"Sauvegarde consentement pour {email}: {consent_value}")
+    
     try:
         supabase = get_supabase_client()
+        
+        if supabase is None:
+            debug_log("Impossible de sauvegarder le consentement (pas de connexion)")
+            return False
         
         response = supabase.table('customers').update({
             'data_consent': consent_value
         }).eq('email', email).execute()
         
+        debug_log("Consentement sauvegardé avec succès")
         return True
     
     except Exception as e:
-        st.error(f"❌ Erreur lors de la sauvegarde du consentement : {e}")
+        st.warning(f"⚠️ Erreur lors de la sauvegarde du consentement : {e}")
+        debug_log(f"Erreur sauvegarde consentement: {e}")
         return False
 
 
@@ -136,37 +224,60 @@ def has_access_to_dashboard(access_key, dashboard_id):
     """
     Vérifie si un utilisateur a accès à un dashboard spécifique.
     """
+    debug_log(f"Vérification accès au dashboard '{dashboard_id}' pour clé {access_key}")
+    
     try:
         supabase = get_supabase_client()
+        
+        if supabase is None:
+            debug_log("Pas de connexion Supabase")
+            return False
+        
         response = supabase.table('customers').select('product').eq('access_key', access_key).execute()
         
         if not response.data:
+            debug_log("Utilisateur non trouvé")
             return False
         
         user_product = response.data[0].get('product', 'starter')
         allowed_dashboards = DASHBOARD_ACCESS.get(user_product, [])
         
-        return dashboard_id in allowed_dashboards
+        has_access = dashboard_id in allowed_dashboards
+        debug_log(f"Produit: {user_product} - Accès au dashboard: {has_access}")
+        
+        return has_access
         
     except Exception as e:
         st.warning(f"⚠️ Erreur vérification accès : {e}")
+        debug_log(f"Erreur has_access_to_dashboard: {e}")
         return False
 
 
 def get_user_dashboards(access_key):
     """Retourne la liste des dashboards accessibles pour un utilisateur."""
+    debug_log(f"Récupération dashboards pour clé {access_key}")
+    
     try:
         supabase = get_supabase_client()
+        
+        if supabase is None:
+            return []
+        
         response = supabase.table('customers').select('product').eq('access_key', access_key).execute()
         
         if not response.data:
             return []
         
         user_product = response.data[0].get('product', 'starter')
-        return DASHBOARD_ACCESS.get(user_product, [])
+        dashboards = DASHBOARD_ACCESS.get(user_product, [])
+        
+        debug_log(f"Produit: {user_product} - Dashboards: {dashboards}")
+        
+        return dashboards
         
     except Exception as e:
         st.warning(f"⚠️ Erreur récupération dashboards : {e}")
+        debug_log(f"Erreur get_user_dashboards: {e}")
         return []
 
 
@@ -176,18 +287,17 @@ def show_upgrade_message(dashboard_id, current_product):
     
     st.error(f"❌ Accès refusé au dashboard : {dashboard_name}")
     
-    if current_product == 'starter':
+    if current_product in ['starter', 'finance', 'marketing', 'operations']:
         st.markdown(f"""
         ### 🔒 Dashboard réservé au Growth Bundle
         
         Le dashboard **{dashboard_name}** est disponible uniquement avec le **Growth Bundle**.
         
-        **Vous avez actuellement : Starter Pack**
+        **Vous avez actuellement : {current_product.title()}**
         
         #### 🎁 Passez au Growth Bundle pour débloquer :
         
-        ✅ **Customer Intelligence** - Comprenez vos clients  
-        ✅ **SEO Analyzer** - Optimisez votre visibilité  
+        ✅ **Tous les dashboards (3)**
         ✅ **Accès IA en avant-première**  
         ✅ **Support prioritaire**  
         ✅ **Mises à jour gratuites**
@@ -207,49 +317,27 @@ def show_upgrade_message(dashboard_id, current_product):
     st.stop()
 
 
-def display_user_badge(user_info):
-    """Affiche un badge avec les informations utilisateur dans la sidebar."""
-    product_name = "Starter Pack" if user_info['product'] == 'starter' else "Growth Bundle"
-    product_emoji = "🥉" if user_info['product'] == 'starter' else "🏆"
-    
-    st.sidebar.markdown(f"""
-    ---
-    ### {product_emoji} Votre Abonnement
-    
-    **Email :** {user_info['email']}  
-    **Pack :** {product_name}
-    
-    ---
-    """)
-    
-    # Afficher les dashboards accessibles
-    accessible_dashboards = get_user_dashboards(user_info['access_key'])
-    
-    st.sidebar.markdown("**Vos dashboards :**")
-    for dashboard_id in accessible_dashboards:
-        dashboard_name = DASHBOARD_NAMES.get(dashboard_id, dashboard_id)
-        st.sidebar.markdown(f"✅ {dashboard_name}")
-    
-    # Bouton upgrade si Starter
-    if user_info['product'] == 'starter':
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("**Débloquez tous les dashboards !**")
-        if st.sidebar.button("⬆️ Upgrader vers Bundle", type="primary"):
-            st.sidebar.info("🔥 Passez au Growth Bundle pour 38€ !")
-            st.sidebar.markdown("[Upgrader maintenant](https://buy.stripe.com/upgrade)")
-
-
 def get_user_consent(email):
     """Récupère le statut de consentement d'un utilisateur."""
+    debug_log(f"Récupération consentement pour {email}")
+    
     try:
         supabase = get_supabase_client()
+        
+        if supabase is None:
+            return False
+        
         response = supabase.table('customers').select('data_consent').eq('email', email).execute()
         
         if response.data:
-            return response.data[0].get('data_consent', False)
+            consent = response.data[0].get('data_consent', False)
+            debug_log(f"Consentement: {consent}")
+            return consent
         
+        debug_log("Utilisateur non trouvé")
         return False
         
     except Exception as e:
         st.warning(f"⚠️ Erreur récupération consentement : {e}")
+        debug_log(f"Erreur get_user_consent: {e}")
         return False
