@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-from supabase import create_client, Client
+from supabase import create_client
 
 # Configuration des dashboards par produit
 DASHBOARD_ACCESS = {
@@ -16,7 +16,7 @@ DASHBOARD_NAMES = {
 }
 
 
-def get_supabase_client() -> Client:
+def get_supabase_client():
     """Initialise et retourne le client Supabase"""
     return create_client(
         st.secrets["supabase"]["url"],
