@@ -148,11 +148,9 @@ with col1:
         </div>
         """, unsafe_allow_html=True)
         
-        # Utiliser switch_page qui gère mieux les paramètres
-        if st.button("🚀 Accéder au Finance Pro", key="btn_finance", type="primary", use_container_width=True):
-            # Sauvegarder la clé en session_state avant de naviguer
-            st.session_state['access_key'] = user_info['access_key']
-            st.switch_page("pages/etsy_finance_pro.py")
+        # 🔥 CORRECTION : Utiliser un lien HTML avec le paramètre key
+        finance_url = f"/etsy_finance_pro?key={user_info['access_key']}"
+        st.markdown(f'<a href="{finance_url}" target="_self"><button style="width:100%; padding:0.75rem; background:#F56400; color:white; border:none; border-radius:5px; font-size:1rem; cursor:pointer; font-weight:bold;">🚀 Accéder au Finance Pro</button></a>', unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="dashboard-card finance locked">
@@ -179,9 +177,8 @@ with col2:
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🚀 Accéder au Customer Intelligence", key="btn_customer", type="primary", use_container_width=True):
-            st.session_state['access_key'] = user_info['access_key']
-            st.switch_page("pages/etsy_customer_intelligence.py")
+        customer_url = f"/etsy_customer_intelligence?key={user_info['access_key']}"
+        st.markdown(f'<a href="{customer_url}" target="_self"><button style="width:100%; padding:0.75rem; background:#667eea; color:white; border:none; border-radius:5px; font-size:1rem; cursor:pointer; font-weight:bold;">🚀 Accéder au Customer Intelligence</button></a>', unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="dashboard-card customer locked">
@@ -212,9 +209,8 @@ with col3:
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🚀 Accéder au SEO Analyzer", key="btn_seo", type="primary", use_container_width=True):
-            st.session_state['access_key'] = user_info['access_key']
-            st.switch_page("pages/etsy_seo_analyzer.py")
+        seo_url = f"/etsy_seo_analyzer?key={user_info['access_key']}"
+        st.markdown(f'<a href="{seo_url}" target="_self"><button style="width:100%; padding:0.75rem; background:#f5576c; color:white; border:none; border-radius:5px; font-size:1rem; cursor:pointer; font-weight:bold;">🚀 Accéder au SEO Analyzer</button></a>', unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="dashboard-card seo locked">
