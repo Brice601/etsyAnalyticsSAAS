@@ -20,10 +20,15 @@ reportlab==4.0.9
 # Machine Learning (for future AI features)
 scikit-learn>=1.5.0
 
+# Supabase (avec toutes ses dépendances)
 supabase>=2.7.0
-
+postgrest>=0.16.0
+httpx>=0.27.0
+python-dateutil>=2.8.2
+storage3>=0.7.0
+realtime>=2.0.0
+gotrue>=2.4.0
 
 # Future integrations (commented for now)
 # stripe==7.0.0
-
 # resend==0.7.0

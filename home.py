@@ -6,7 +6,11 @@ import os
 # Ajouter le chemin pour les imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from auth.access_manager import check_access, has_access_to_dashboard
+try:
+    from auth.access_manager import check_access, has_access_to_dashboard
+except ImportError as e:
+    st.error(f"❌ Erreur d'import : {e}")
+    st.stop()
 
 # Configuration de la page
 st.set_page_config(
