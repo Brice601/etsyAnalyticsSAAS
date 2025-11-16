@@ -2,32 +2,26 @@
 streamlit>=1.37.0
 
 # Data manipulation
-pandas==2.2.0
-numpy==1.26.3
+pandas>=2.0.0
+numpy>=1.24.0
 
 # Visualisation
-plotly==5.18.0
+plotly>=5.18.0
 
 # Excel/CSV handling
-openpyxl==3.1.2
+openpyxl>=3.1.0
 
 # Images
-Pillow>=10.4.0
+Pillow>=10.0.0
 
 # PDF generation
-reportlab==4.0.9
+reportlab>=4.0.0
 
 # Machine Learning (for future AI features)
-scikit-learn>=1.5.0
+scikit-learn>=1.3.0
 
 # Supabase (avec toutes ses dépendances)
 supabase>=2.7.0
-postgrest>=0.16.0
-httpx>=0.27.0
-python-dateutil>=2.8.2
-storage3>=0.7.0
-realtime>=2.0.0
-gotrue>=2.4.0
 
 # Future integrations (commented for now)
 # stripe==7.0.0
