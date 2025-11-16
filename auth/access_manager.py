@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-from supabase import create_client
+from supabase import create_client, Client
 
 # Configuration des dashboards par produit
 DASHBOARD_ACCESS = {
@@ -15,8 +15,16 @@ DASHBOARD_NAMES = {
     'seo_analyzer': 'SEO Analyzer'
 }
 
+# Noms lisibles des produits
+PAYMENT_LINK_TO_PRODUCT = {
+    "plink_1STmBL5aDYuuRu2fzc3Z11mi": "finance",
+    "plink_1STmEV5aDYuuRu2fD77lDlxB": "marketing",
+    "plink_1STmGb5aDYuuRu2fNJQr5jP5": "operations",
+    "plink_1STmPj5aDYuuRu2fPw0IlvdB": "bundle"
+}
 
-def get_supabase_client():
+
+def get_supabase_client() -> Client:
     """Initialise et retourne le client Supabase"""
     return create_client(
         st.secrets["supabase"]["url"],
@@ -50,8 +58,10 @@ def check_access():
         - Cliquez sur le lien d'accès unique fourni
         
         **Pas encore client ?**
-        - [Acheter le Starter Pack - 29€](https://buy.stripe.com/starter)
-        - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/bundle) ⭐ Recommandé
+        - [Acheter le dashboard Finance pro - 29€](https://buy.stripe.com/test_00w7sEafuaTU9kU9fLgIo00)
+        - [Acheter le dashboard customer - 29€](https://buy.stripe.com/test_dRm14g9bq7HIeFegIdgIo01)
+        - [Acheter le dashboard seo - 29€](https://buy.stripe.com/test_14A6oA5Zee66cx663zgIo02)
+        - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/test_dRm3co5Ze6DEdBa9fLgIo04) ⭐ Recommandé
         
         ---
         
