@@ -46,8 +46,8 @@ collected_data/*
 !collected_data/.gitkeep
 
 # Streamlit
-.streamlit/
 !.streamlit/config.toml
+.streamlit/
 .streamlit/secrets.toml
 
 # OS
