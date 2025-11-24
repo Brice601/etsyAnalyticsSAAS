@@ -2,15 +2,7 @@ import streamlit as st
 from datetime import datetime
 
 # 🔥 MODE DEBUG : Affiche les étapes de connexion
-DEBUG_MODE = False
-
-# Configuration payment link par produit
-# PAYMENT_LINK_TO_PRODUCT = {
-#     "plink_1STmBL5aDYuuRu2fzc3Z11mi": "finance",
-#     "plink_1STmEV5aDYuuRu2fD77lDlxB": "marketing",
-#     "plink_1STmGb5aDYuuRu2fNJQr5jP5": "operations",
-#     "plink_1STmPj5aDYuuRu2fPw0IlvdB": "bundle"
-# }
+DEBUG_MODE = True  # ACTIVÉ pour diagnostic
 
 # Configuration des dashboards par produit
 DASHBOARD_ACCESS = {
@@ -32,7 +24,7 @@ DASHBOARD_NAMES = {
 def debug_log(message):
     """Affiche un message de debug si DEBUG_MODE est activé"""
     if DEBUG_MODE:
-        st.sidebar.info(f"🐛 DEBUG: {message}")
+        st.sidebar.info(f"🛠 DEBUG: {message}")
 
 
 def get_supabase_client():
@@ -70,19 +62,12 @@ def get_supabase_client():
         # Créer le client
         debug_log("Création du client Supabase...")
         client = create_client(url, key)
-        debug_log("Client Supabase créé")
+        debug_log("✅ Client Supabase créé avec succès")
         
-        # Test de connexion
-        debug_log("Test de connexion à la table customers...")
-        try:
-            test = client.table('customers').select('id').limit(1).execute()
-            debug_log(f"Connexion OK - {len(test.data)} ligne(s) trouvée(s)")
-            return client
-        except Exception as conn_error:
-            st.error(f"❌ Erreur de connexion à la table 'customers'")
-            st.code(str(conn_error))
-            debug_log(f"Erreur requête: {conn_error}")
-            return None
+        # PAS DE TEST DE CONNEXION ICI
+        # Le test sera fait lors de la première vraie requête
+        
+        return client
         
     except Exception as e:
         st.error(f"❌ Erreur initialisation Supabase")
@@ -127,10 +112,10 @@ def check_access():
         
         ---
         
-        **🧪 MODE TEST (si Make webhook fonctionne) :**
+        **🧪 MODE TEST :**
         Ajoutez `?key=VOTRE_CLE` à l'URL
         
-        Exemple : `https://votre-app.streamlit.app/?key=ABC123`
+        Exemple : `https://votre-app.streamlit.app/?key=test123`
         """)
         st.stop()
     
@@ -148,12 +133,17 @@ def check_access():
     try:
         # Requête pour vérifier la clé
         debug_log(f"Recherche de la clé '{access_key}' dans la table customers...")
-        response = supabase.table('customers').select('*').eq('access_key', access_key).execute()
         
-        debug_log(f"Réponse Supabase: {len(response.data) if response.data else 0} résultat(s)")
+        # 🔥 CORRECTION : Utiliser .execute() sans .data d'abord
+        response = supabase.table('customers') \
+            .select('*') \
+            .eq('access_key', access_key) \
+            .execute()
         
-        # Si pas de résultat
-        if not response.data or len(response.data) == 0:
+        debug_log(f"Réponse brute: {response}")
+        
+        # Vérifier si response.data existe et contient des données
+        if not hasattr(response, 'data') or not response.data or len(response.data) == 0:
             debug_log("Clé d'accès non trouvée dans la base")
             st.error("❌ Clé d'accès invalide")
             st.markdown(f"""
@@ -175,17 +165,18 @@ def check_access():
         user_info = response.data[0]
         user_info['access_key'] = access_key
         
-        debug_log(f"Utilisateur trouvé: {user_info.get('email')} - Produit: {user_info.get('product')}")
+        debug_log(f"✅ Utilisateur trouvé: {user_info.get('email')} - Produit: {user_info.get('product')}")
         
         # Mettre à jour la dernière connexion
         debug_log("Mise à jour last_login...")
         try:
-            supabase.table('customers').update({
-                'last_login': datetime.now().isoformat()
-            }).eq('access_key', access_key).execute()
-            debug_log("last_login mis à jour")
+            update_response = supabase.table('customers') \
+                .update({'last_login': datetime.now().isoformat()}) \
+                .eq('access_key', access_key) \
+                .execute()
+            debug_log("✅ last_login mis à jour")
         except Exception as update_error:
-            debug_log(f"Erreur mise à jour last_login: {update_error}")
+            debug_log(f"⚠️ Erreur mise à jour last_login: {update_error}")
             # Ne pas bloquer si la mise à jour échoue
         
         # Sauvegarder dans session_state
@@ -197,9 +188,15 @@ def check_access():
         return user_info
         
     except Exception as e:
-        st.error(f"❌ Erreur de connexion")
+        st.error(f"❌ Erreur lors de la vérification d'accès")
         st.code(str(e))
-        debug_log(f"Erreur dans check_access: {e}")
+        debug_log(f"❌ Erreur dans check_access: {e}")
+        
+        # Afficher plus d'infos en mode debug
+        if DEBUG_MODE:
+            import traceback
+            st.code(traceback.format_exc())
+        
         st.info("💡 Si le problème persiste, contactez le support : support@architecte-ia.fr")
         st.stop()
 
@@ -215,9 +212,10 @@ def save_consent(email, consent_value):
             debug_log("Impossible de sauvegarder le consentement (pas de connexion)")
             return False
         
-        response = supabase.table('customers').update({
-            'data_consent': consent_value
-        }).eq('email', email).execute()
+        response = supabase.table('customers') \
+            .update({'data_consent': consent_value}) \
+            .eq('email', email) \
+            .execute()
         
         debug_log("Consentement sauvegardé avec succès")
         return True
@@ -241,7 +239,10 @@ def has_access_to_dashboard(access_key, dashboard_id):
             debug_log("Pas de connexion Supabase")
             return False
         
-        response = supabase.table('customers').select('product').eq('access_key', access_key).execute()
+        response = supabase.table('customers') \
+            .select('product') \
+            .eq('access_key', access_key) \
+            .execute()
         
         if not response.data:
             debug_log("Utilisateur non trouvé")
@@ -271,7 +272,10 @@ def get_user_dashboards(access_key):
         if supabase is None:
             return []
         
-        response = supabase.table('customers').select('product').eq('access_key', access_key).execute()
+        response = supabase.table('customers') \
+            .select('product') \
+            .eq('access_key', access_key) \
+            .execute()
         
         if not response.data:
             return []
@@ -335,7 +339,10 @@ def get_user_consent(email):
         if supabase is None:
             return False
         
-        response = supabase.table('customers').select('data_consent').eq('email', email).execute()
+        response = supabase.table('customers') \
+            .select('data_consent') \
+            .eq('email', email) \
+            .execute()
         
         if response.data:
             consent = response.data[0].get('data_consent', False)
