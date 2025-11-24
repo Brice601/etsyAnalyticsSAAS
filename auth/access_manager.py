@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import datetime
 
 # 🔥 MODE DEBUG : Affiche les étapes de connexion
-DEBUG_MODE = True  # ACTIVÉ pour diagnostic
+DEBUG_MODE = False  # ACTIVÉ pour diagnostic
 
 # Configuration des dashboards par produit
 DASHBOARD_ACCESS = {
