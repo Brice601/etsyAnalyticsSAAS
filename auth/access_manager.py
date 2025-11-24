@@ -2,7 +2,15 @@ import streamlit as st
 from datetime import datetime
 
 # 🔥 MODE DEBUG : Affiche les étapes de connexion
-DEBUG_MODE = True
+DEBUG_MODE = False
+
+# Configuration payment link par produit
+# PAYMENT_LINK_TO_PRODUCT = {
+#     "plink_1STmBL5aDYuuRu2fzc3Z11mi": "finance",
+#     "plink_1STmEV5aDYuuRu2fD77lDlxB": "marketing",
+#     "plink_1STmGb5aDYuuRu2fNJQr5jP5": "operations",
+#     "plink_1STmPj5aDYuuRu2fPw0IlvdB": "bundle"
+# }
 
 # Configuration des dashboards par produit
 DASHBOARD_ACCESS = {
