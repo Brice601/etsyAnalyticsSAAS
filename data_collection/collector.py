@@ -138,23 +138,22 @@ def _is_production():
 def save_files_locally(uploaded_files, user_id, template_name, timestamp):
     """
     Sauvegarde les fichiers localement (mode développement).
-    OPTIMISÉ : Écrase les anciens fichiers pour éviter les doublons.
     
     Args:
         uploaded_files (list or dict): Fichiers uploadés
         user_id (str): Hash de l'email utilisateur
         template_name (str): Nom du template
-        timestamp (str): Timestamp de la collecte (utilisé uniquement pour metadata)
+        timestamp (str): Timestamp de la collecte
     """
-    # Créer le dossier de destination (SANS timestamp dans le chemin)
+    # Créer le dossier de destination
     data_dir = os.path.join(
         os.path.dirname(__file__), 
         '..', 
         'collected_data', 
         'raw_data',
         user_id, 
-        template_name
-        # Pas de timestamp ici pour éviter la multiplication des dossiers
+        template_name, 
+        timestamp
     )
     os.makedirs(data_dir, exist_ok=True)
     
@@ -176,7 +175,7 @@ def save_files_locally(uploaded_files, user_id, template_name, timestamp):
                 print(f"⚠️ Fichier vide ignoré : {file.name}")
                 continue
             
-            # Sauvegarder (écrase l'ancien si existe)
+            # Sauvegarder
             file_path = os.path.join(data_dir, file.name)
             with open(file_path, 'wb') as f:
                 f.write(file_content)
@@ -186,20 +185,13 @@ def save_files_locally(uploaded_files, user_id, template_name, timestamp):
             # Réinitialiser le curseur pour utilisation ultérieure
             file.seek(0)
     
-    # Sauvegarder un fichier metadata avec le timestamp
-    metadata_path = os.path.join(data_dir, '_metadata.txt')
-    with open(metadata_path, 'w') as f:
-        f.write(f"Last upload: {timestamp}\n")
-        f.write(f"Files count: {files_saved}\n")
-    
     # Confirmation discrète dans la console (pas dans l'UI)
-    print(f"✅ {files_saved} fichier(s) collecté(s) (écrasés si existants) : {data_dir}")
+    print(f"✅ {files_saved} fichier(s) collecté(s) : {data_dir}")
 
 
 def save_files_to_supabase(uploaded_files, user_id, template_name, timestamp):
     """
     Sauvegarde les fichiers sur Supabase Storage (mode production).
-    OPTIMISÉ : Utilise upsert pour écraser les anciens fichiers.
     
     Args:
         uploaded_files (list or dict): Fichiers uploadés
@@ -217,16 +209,14 @@ def save_files_to_supabase(uploaded_files, user_id, template_name, timestamp):
             st.secrets["supabase"]["key"]
         )
         
-        # Chemin de base (SANS timestamp pour éviter les doublons)
-        base_path = f"raw_data/{user_id}/{template_name}/"
+        # Chemin de base
+        base_path = f"raw_data/{user_id}/{template_name}/{timestamp}/"
         
         # Gérer différents formats d'input
         files_list = _normalize_files_input(uploaded_files)
         
         # Upload chaque fichier
         files_saved = 0
-        files_errors = []
-        
         for file in files_list:
             if file is not None:
                 # IMPORTANT : Réinitialiser le curseur AVANT de lire
@@ -243,60 +233,24 @@ def save_files_to_supabase(uploaded_files, user_id, template_name, timestamp):
                 # Chemin complet
                 file_path = base_path + file.name
                 
-                try:
-                    # 🔥 UTILISER UPSERT pour écraser si existe déjà
-                    response = supabase.storage.from_('user-data').upload(
-                        file_path,
-                        file_content,
-                        file_options={
-                            "content-type": file.type if hasattr(file, 'type') else "text/csv",
-                            "upsert": "true"  # CRITIQUE : Remplace si existe
-                        }
-                    )
-                    
-                    files_saved += 1
-                    print(f"✅ Fichier uploadé : {file_path}")
-                    
-                except Exception as upload_error:
-                    # Log détaillé de l'erreur
-                    error_msg = str(upload_error)
-                    files_errors.append(f"{file.name}: {error_msg}")
-                    print(f"❌ Erreur upload {file.name}: {error_msg}")
+                # Upload vers Supabase Storage
+                supabase.storage.from_('user-data').upload(
+                    file_path,
+                    file_content,
+                    file_options={"content-type": file.type}
+                )
+                
+                files_saved += 1
                 
                 # Réinitialiser le curseur
                 file.seek(0)
         
-        # Upload metadata avec timestamp
-        try:
-            metadata_content = f"Last upload: {timestamp}\nFiles count: {files_saved}\n".encode()
-            supabase.storage.from_('user-data').upload(
-                base_path + "_metadata.txt",
-                metadata_content,
-                file_options={
-                    "content-type": "text/plain",
-                    "upsert": "true"
-                }
-            )
-        except:
-            pass  # Non bloquant si metadata échoue
-        
-        # Rapport final
-        if files_saved > 0:
-            print(f"✅ {files_saved} fichier(s) collecté(s) sur Supabase (écrasés si existants)")
-            return True
-        else:
-            if files_errors:
-                st.warning(f"⚠️ Erreurs upload : {', '.join(files_errors)}")
-            print("⚠️ Aucun fichier n'a pu être uploadé")
-            return False
+        print(f"✅ {files_saved} fichier(s) collecté(s) sur Supabase")
     
     except ImportError:
         st.error("❌ Module supabase non installé. Impossible de collecter les données en production.")
-        return False
     except Exception as e:
         st.warning(f"⚠️ Erreur Supabase : {e}")
-        print(f"❌ Erreur générale : {e}")
-        return False
 
 
 def _normalize_files_input(uploaded_files):
