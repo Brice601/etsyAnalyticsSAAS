@@ -68,7 +68,9 @@ def show_data_opt_in(user_email):
                 
                 st.success("✅ Merci ! Vous contribuez à l'amélioration de l'outil.")
                 st.info("🎁 Vous recevrez un email dès que les prédictions IA seront disponibles.")
-                st.rerun()
+                
+                # PAS DE RERUN ICI - On laisse le dashboard continuer
+                # st.rerun()  # ❌ SUPPRIMÉ
         
         with col2:
             if st.button("❌ Non merci", use_container_width=True):
@@ -80,7 +82,9 @@ def show_data_opt_in(user_email):
                 save_consent(user_email, False)
                 
                 st.info("Pas de problème ! Vous pourrez toujours changer d'avis dans les paramètres.")
-                st.rerun()
+                
+                # PAS DE RERUN ICI non plus
+                # st.rerun()  # ❌ SUPPRIMÉ
 
 
 def get_file_hash(file_content):
@@ -108,26 +112,44 @@ def collect_raw_data(uploaded_files, user_email, template_name):
     Returns:
         bool: True si la collecte a réussi, False sinon
     """
+    # 🔍 DEBUG
+    print(f"🔍 collect_raw_data appelé avec :")
+    print(f"  - user_email: {user_email}")
+    print(f"  - template_name: {template_name}")
+    print(f"  - uploaded_files type: {type(uploaded_files)}")
+    print(f"  - data_consent: {st.session_state.get('data_consent', False)}")
+    
     # Vérifier le consentement
     if not st.session_state.get('data_consent', False):
+        print("⚠️ Pas de consentement - collecte annulée")
         return False
+    
+    print("✅ Consentement OK - démarrage collecte")
     
     try:
         # Hash de l'email pour anonymiser l'utilisateur
         user_id = hashlib.sha256(user_email.encode()).hexdigest()
+        print(f"🔑 User ID (hash): {user_id[:20]}...")
         
         # MODE DÉVELOPPEMENT : Sauvegarder localement
         if not _is_production():
-            save_files_locally(uploaded_files, user_id, template_name)
+            print("📂 Mode LOCAL - sauvegarde locale")
+            result = save_files_locally(uploaded_files, user_id, template_name)
+            print(f"📊 Résultat sauvegarde locale: {result}")
             return True
         
         # MODE PRODUCTION : Sauvegarder sur Supabase Storage
         else:
-            save_files_to_supabase(uploaded_files, user_id, template_name)
-            return True
+            print("☁️ Mode PRODUCTION - sauvegarde Supabase")
+            result = save_files_to_supabase(uploaded_files, user_id, template_name)
+            print(f"📊 Résultat sauvegarde Supabase: {result}")
+            return result
     
     except Exception as e:
         st.warning(f"⚠️ Erreur lors de la collecte de données : {e}")
+        print(f"❌ Exception dans collect_raw_data: {e}")
+        import traceback
+        print(traceback.format_exc())
         return False
 
 
