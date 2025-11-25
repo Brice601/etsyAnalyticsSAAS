@@ -1,8 +1,12 @@
 """
-data_collection/collector.py
+data_collection/collector.py - VERSION CORRIGÉE
 
 Module de collecte de données brutes (sans anonymisation).
 OPTIMISÉ : Détection des doublons par hash pour éviter les copies inutiles.
+
+CORRECTIONS :
+1. Utilisation de service_role_key au lieu de key pour contourner RLS
+2. Gestion du consentement persistante (une seule fois)
 """
 
 import streamlit as st
@@ -15,15 +19,26 @@ import json
 def show_data_opt_in(user_email):
     """
     Affiche le pop-up de consentement au premier upload.
+    ✅ CORRIGÉ : Vérifie d'abord la base de données
     
     Args:
         user_email (str): Email de l'utilisateur
     """
-    # Vérifier si le consentement a déjà été demandé
+    # ✅ NOUVEAU : Vérifier d'abord dans la base de données
+    from auth.access_manager import get_user_consent
+    
+    # Si l'utilisateur a déjà répondu (base de données), ne rien afficher
+    db_consent = get_user_consent(user_email)
+    if db_consent is not None:  # None = pas de réponse, True/False = réponse donnée
+        st.session_state.consent_asked = True
+        st.session_state.data_consent = db_consent
+        return
+    
+    # Vérifier si le consentement a déjà été demandé dans cette session
     if 'consent_asked' not in st.session_state:
         st.session_state.consent_asked = False
     
-    # Si déjà demandé, ne rien afficher
+    # Si déjà demandé dans la session, ne rien afficher
     if st.session_state.consent_asked:
         return
     
@@ -68,9 +83,6 @@ def show_data_opt_in(user_email):
                 
                 st.success("✅ Merci ! Vous contribuez à l'amélioration de l'outil.")
                 st.info("🎁 Vous recevrez un email dès que les prédictions IA seront disponibles.")
-                
-                # PAS DE RERUN ICI - On laisse le dashboard continuer
-                # st.rerun()  # ❌ SUPPRIMÉ
         
         with col2:
             if st.button("❌ Non merci", use_container_width=True):
@@ -82,9 +94,6 @@ def show_data_opt_in(user_email):
                 save_consent(user_email, False)
                 
                 st.info("Pas de problème ! Vous pourrez toujours changer d'avis dans les paramètres.")
-                
-                # PAS DE RERUN ICI non plus
-                # st.rerun()  # ❌ SUPPRIMÉ
 
 
 def get_file_hash(file_content):
@@ -261,6 +270,7 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
     """
     Sauvegarde les fichiers sur Supabase Storage (mode production).
     OPTIMISÉ : Détecte les doublons par hash.
+    ✅ CORRIGÉ : Utilise service_role_key pour contourner RLS
     
     Args:
         uploaded_files (list or dict): Fichiers uploadés
@@ -271,10 +281,11 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
         # Import uniquement en production
         from supabase import create_client
         
-        # Connexion à Supabase
+        # ✅ CORRECTION : Utiliser service_role_key au lieu de key
+        # La clé service_role contourne RLS et a tous les droits
         supabase = create_client(
             st.secrets["supabase"]["url"],
-            st.secrets["supabase"]["key"]
+            st.secrets["supabase"]["service_role_key"]  # ✅ CHANGÉ ICI
         )
         
         # Chemin de base (SANS timestamp)

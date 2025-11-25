@@ -330,14 +330,17 @@ def show_upgrade_message(dashboard_id, current_product):
 
 
 def get_user_consent(email):
-    """Récupère le statut de consentement d'un utilisateur."""
+    """
+    Récupère le statut de consentement d'un utilisateur.
+    ✅ CORRIGÉ : Retourne None si jamais demandé, True/False sinon
+    """
     debug_log(f"Récupération consentement pour {email}")
     
     try:
         supabase = get_supabase_client()
         
         if supabase is None:
-            return False
+            return None  # ✅ Retourner None au lieu de False
         
         response = supabase.table('customers') \
             .select('data_consent') \
@@ -345,14 +348,20 @@ def get_user_consent(email):
             .execute()
         
         if response.data:
-            consent = response.data[0].get('data_consent', False)
+            # ✅ IMPORTANT : Distinguer "pas de consentement" de "jamais demandé"
+            consent = response.data[0].get('data_consent')
+            
+            # Si consent est None, l'utilisateur n'a jamais été sollicité
+            # Si consent est False, l'utilisateur a refusé
+            # Si consent est True, l'utilisateur a accepté
+            
             debug_log(f"Consentement: {consent}")
-            return consent
+            return consent  # Peut être None, True ou False
         
         debug_log("Utilisateur non trouvé")
-        return False
+        return None  # ✅ Retourner None au lieu de False
         
     except Exception as e:
         st.warning(f"⚠️ Erreur récupération consentement : {e}")
         debug_log(f"Erreur get_user_consent: {e}")
-        return False
+        return None  # ✅ Retourner None au lieu de False
