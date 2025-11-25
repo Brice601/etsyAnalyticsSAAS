@@ -2,14 +2,14 @@
 data_collection/collector.py
 
 Module de collecte de données brutes (sans anonymisation).
-Les données sont copiées telles quelles localement ou vers Supabase Storage.
-L'anonymisation se fera lors de l'utilisation ultérieure des données.
+OPTIMISÉ : Détection des doublons par hash pour éviter les copies inutiles.
 """
 
 import streamlit as st
 import hashlib
 from datetime import datetime
 import os
+import json
 
 
 def show_data_opt_in(user_email):
@@ -83,6 +83,19 @@ def show_data_opt_in(user_email):
                 st.rerun()
 
 
+def get_file_hash(file_content):
+    """
+    Calcule le hash SHA256 d'un fichier pour détecter les doublons.
+    
+    Args:
+        file_content (bytes): Contenu du fichier
+    
+    Returns:
+        str: Hash SHA256 du fichier
+    """
+    return hashlib.sha256(file_content).hexdigest()
+
+
 def collect_raw_data(uploaded_files, user_email, template_name):
     """
     Collecte les fichiers bruts (sans anonymisation) si l'utilisateur a donné son consentement.
@@ -103,17 +116,14 @@ def collect_raw_data(uploaded_files, user_email, template_name):
         # Hash de l'email pour anonymiser l'utilisateur
         user_id = hashlib.sha256(user_email.encode()).hexdigest()
         
-        # Timestamp pour version des fichiers
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
         # MODE DÉVELOPPEMENT : Sauvegarder localement
         if not _is_production():
-            save_files_locally(uploaded_files, user_id, template_name, timestamp)
+            save_files_locally(uploaded_files, user_id, template_name)
             return True
         
         # MODE PRODUCTION : Sauvegarder sur Supabase Storage
         else:
-            save_files_to_supabase(uploaded_files, user_id, template_name, timestamp)
+            save_files_to_supabase(uploaded_files, user_id, template_name)
             return True
     
     except Exception as e:
@@ -135,33 +145,42 @@ def _is_production():
         return False
 
 
-def save_files_locally(uploaded_files, user_id, template_name, timestamp):
+def save_files_locally(uploaded_files, user_id, template_name):
     """
     Sauvegarde les fichiers localement (mode développement).
+    OPTIMISÉ : Détecte les doublons par hash.
     
     Args:
         uploaded_files (list or dict): Fichiers uploadés
         user_id (str): Hash de l'email utilisateur
         template_name (str): Nom du template
-        timestamp (str): Timestamp de la collecte
     """
-    # Créer le dossier de destination
+    # Créer le dossier de destination (SANS timestamp)
     data_dir = os.path.join(
         os.path.dirname(__file__), 
         '..', 
         'collected_data', 
         'raw_data',
         user_id, 
-        template_name, 
-        timestamp
+        template_name
     )
     os.makedirs(data_dir, exist_ok=True)
+    
+    # Charger l'historique des hashes
+    hash_file = os.path.join(data_dir, '_file_hashes.json')
+    if os.path.exists(hash_file):
+        with open(hash_file, 'r') as f:
+            file_hashes = json.load(f)
+    else:
+        file_hashes = {}
     
     # Gérer différents formats d'input
     files_list = _normalize_files_input(uploaded_files)
     
     # Copier chaque fichier
     files_saved = 0
+    files_skipped = 0
+    
     for file in files_list:
         if file is not None:
             # IMPORTANT : Réinitialiser le curseur AVANT de lire
@@ -173,31 +192,58 @@ def save_files_locally(uploaded_files, user_id, template_name, timestamp):
             # Vérifier que le contenu n'est pas vide
             if len(file_content) == 0:
                 print(f"⚠️ Fichier vide ignoré : {file.name}")
+                file.seek(0)
                 continue
             
-            # Sauvegarder
+            # Calculer le hash du fichier
+            current_hash = get_file_hash(file_content)
+            
+            # Vérifier si le fichier existe déjà avec le même contenu
+            if file.name in file_hashes and file_hashes[file.name] == current_hash:
+                print(f"⏭️ Fichier déjà existant (hash identique) : {file.name}")
+                files_skipped += 1
+                file.seek(0)
+                continue
+            
+            # Sauvegarder le fichier
             file_path = os.path.join(data_dir, file.name)
             with open(file_path, 'wb') as f:
                 f.write(file_content)
             
+            # Mettre à jour l'historique des hashes
+            file_hashes[file.name] = current_hash
+            
             files_saved += 1
+            print(f"✅ Fichier sauvegardé : {file.name}")
             
             # Réinitialiser le curseur pour utilisation ultérieure
             file.seek(0)
     
-    # Confirmation discrète dans la console (pas dans l'UI)
-    print(f"✅ {files_saved} fichier(s) collecté(s) : {data_dir}")
+    # Sauvegarder l'historique des hashes
+    with open(hash_file, 'w') as f:
+        json.dump(file_hashes, f, indent=2)
+    
+    # Sauvegarder metadata avec timestamp
+    metadata_path = os.path.join(data_dir, '_metadata.txt')
+    with open(metadata_path, 'a') as f:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        f.write(f"\n--- Upload {timestamp} ---\n")
+        f.write(f"Nouveaux fichiers : {files_saved}\n")
+        f.write(f"Fichiers ignorés (doublons) : {files_skipped}\n")
+    
+    # Confirmation discrète dans la console
+    print(f"✅ {files_saved} fichier(s) collecté(s) | {files_skipped} doublon(s) ignoré(s)")
 
 
-def save_files_to_supabase(uploaded_files, user_id, template_name, timestamp):
+def save_files_to_supabase(uploaded_files, user_id, template_name):
     """
     Sauvegarde les fichiers sur Supabase Storage (mode production).
+    OPTIMISÉ : Détecte les doublons par hash.
     
     Args:
         uploaded_files (list or dict): Fichiers uploadés
         user_id (str): Hash de l'email utilisateur
         template_name (str): Nom du template
-        timestamp (str): Timestamp de la collecte
     """
     try:
         # Import uniquement en production
@@ -209,14 +255,27 @@ def save_files_to_supabase(uploaded_files, user_id, template_name, timestamp):
             st.secrets["supabase"]["key"]
         )
         
-        # Chemin de base
-        base_path = f"raw_data/{user_id}/{template_name}/{timestamp}/"
+        # Chemin de base (SANS timestamp)
+        base_path = f"raw_data/{user_id}/{template_name}/"
+        
+        # Télécharger l'historique des hashes depuis Supabase
+        hash_file_path = base_path + "_file_hashes.json"
+        try:
+            hash_data = supabase.storage.from_('user-data').download(hash_file_path)
+            file_hashes = json.loads(hash_data.decode('utf-8'))
+            print("📥 Historique des hashes chargé")
+        except:
+            file_hashes = {}
+            print("📝 Nouvel historique de hashes")
         
         # Gérer différents formats d'input
         files_list = _normalize_files_input(uploaded_files)
         
         # Upload chaque fichier
         files_saved = 0
+        files_skipped = 0
+        files_errors = []
+        
         for file in files_list:
             if file is not None:
                 # IMPORTANT : Réinitialiser le curseur AVANT de lire
@@ -228,29 +287,102 @@ def save_files_to_supabase(uploaded_files, user_id, template_name, timestamp):
                 # Vérifier que le contenu n'est pas vide
                 if len(file_content) == 0:
                     print(f"⚠️ Fichier vide ignoré : {file.name}")
+                    file.seek(0)
+                    continue
+                
+                # Calculer le hash du fichier
+                current_hash = get_file_hash(file_content)
+                
+                # Vérifier si le fichier existe déjà avec le même contenu
+                if file.name in file_hashes and file_hashes[file.name] == current_hash:
+                    print(f"⏭️ Fichier déjà existant (hash identique) : {file.name}")
+                    files_skipped += 1
+                    file.seek(0)
                     continue
                 
                 # Chemin complet
                 file_path = base_path + file.name
                 
-                # Upload vers Supabase Storage
-                supabase.storage.from_('user-data').upload(
-                    file_path,
-                    file_content,
-                    file_options={"content-type": file.type}
-                )
-                
-                files_saved += 1
+                try:
+                    # Upload vers Supabase
+                    response = supabase.storage.from_('user-data').upload(
+                        file_path,
+                        file_content,
+                        file_options={
+                            "content-type": file.type if hasattr(file, 'type') else "text/csv",
+                            "upsert": "true"  # Remplace si existe
+                        }
+                    )
+                    
+                    # Mettre à jour l'historique des hashes
+                    file_hashes[file.name] = current_hash
+                    
+                    files_saved += 1
+                    print(f"✅ Fichier uploadé : {file.name}")
+                    
+                except Exception as upload_error:
+                    error_msg = str(upload_error)
+                    files_errors.append(f"{file.name}: {error_msg}")
+                    print(f"❌ Erreur upload {file.name}: {error_msg}")
                 
                 # Réinitialiser le curseur
                 file.seek(0)
         
-        print(f"✅ {files_saved} fichier(s) collecté(s) sur Supabase")
+        # Sauvegarder l'historique des hashes mis à jour
+        try:
+            hash_content = json.dumps(file_hashes, indent=2).encode('utf-8')
+            supabase.storage.from_('user-data').upload(
+                hash_file_path,
+                hash_content,
+                file_options={
+                    "content-type": "application/json",
+                    "upsert": "true"
+                }
+            )
+            print("📤 Historique des hashes sauvegardé")
+        except Exception as e:
+            print(f"⚠️ Erreur sauvegarde hashes : {e}")
+        
+        # Upload metadata avec timestamp
+        try:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            metadata_content = f"\n--- Upload {timestamp} ---\nNouveaux fichiers : {files_saved}\nFichiers ignorés (doublons) : {files_skipped}\n".encode()
+            
+            # Récupérer l'ancien metadata pour append
+            try:
+                old_metadata = supabase.storage.from_('user-data').download(base_path + "_metadata.txt")
+                metadata_content = old_metadata + metadata_content
+            except:
+                pass
+            
+            supabase.storage.from_('user-data').upload(
+                base_path + "_metadata.txt",
+                metadata_content,
+                file_options={
+                    "content-type": "text/plain",
+                    "upsert": "true"
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ Erreur metadata : {e}")
+        
+        # Rapport final
+        if files_saved > 0 or files_skipped > 0:
+            print(f"✅ {files_saved} fichier(s) collecté(s) | {files_skipped} doublon(s) ignoré(s)")
+            return True
+        else:
+            if files_errors:
+                st.warning(f"⚠️ Erreurs upload : {', '.join(files_errors)}")
+            print("⚠️ Aucun fichier n'a pu être uploadé")
+            return False
     
     except ImportError:
         st.error("❌ Module supabase non installé. Impossible de collecter les données en production.")
+        return False
     except Exception as e:
         st.warning(f"⚠️ Erreur Supabase : {e}")
+        print(f"❌ Erreur générale : {e}")
+        return False
 
 
 def _normalize_files_input(uploaded_files):
