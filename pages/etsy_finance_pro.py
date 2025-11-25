@@ -787,8 +787,8 @@ else:
 
         # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
         # Collecter si l'utilisateur a donné son consentement
-        if st.session_state.get('consent_asked', False):
-    # Récupérer TOUS les fichiers uploadés
+        if st.session_state.get('data_consent', False):  # ✅ Changé : consent_asked → data_consent
+            # Récupérer TOUS les fichiers uploadés
             all_files = {}
             
             # Fichier principal (orderitems)
@@ -796,17 +796,23 @@ else:
                 all_files['orderitems'] = uploaded_file
             
             # Fichier costs (si uploadé)
-            if cost_method == "Upload CSV avec coûts détaillés" and 'cost_file' in locals() and cost_file is not None:
+            if cost_method == "Upload CSV avec coûts détaillés" and cost_file is not None:
                 all_files['costs'] = cost_file
             
             # Fichier relevé Etsy (si uploadé)
-            if fees_method == "Relevé mensuel Etsy (précis)" and 'statement_file' in locals() and statement_file is not None:
+            if fees_method == "Relevé mensuel Etsy (précis)" and statement_file is not None:
                 all_files['etsy_statement'] = statement_file
             
             # Collecter
             from data_collection.collector import collect_raw_data
             if all_files:  # Seulement si on a des fichiers
-                collect_raw_data(all_files, user_info['email'], 'finance_pro')
+                collect_result = collect_raw_data(all_files, user_info['email'], 'finance_pro')
+                
+                # 🔍 DEBUG : Afficher le résultat
+                if collect_result:
+                    print("✅ Collecte réussie")
+                else:
+                    print("⚠️ Collecte échouée ou ignorée")
         # ===================================================
         
         # Onglets principaux
