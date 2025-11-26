@@ -31,9 +31,12 @@ st.set_page_config(
 # ========== NOUVEAU : VÉRIFICATION D'ACCÈS ==========
 user_info = check_access()
 
+# Récupérer le customer_id (UUID depuis Supabase)
+customer_id = user_info.get('id')
+
 # Vérifier l'accès à ce dashboard spécifique
-if not has_access_to_dashboard(user_info['access_key'], 'finance_pro'):
-    show_upgrade_message('finance_pro', user_info['product'])
+if not has_access_to_dashboard(customer_id, 'finance_pro'):
+    show_upgrade_message('finance_pro', customer_id)
     st.stop()
 # ====================================================
 

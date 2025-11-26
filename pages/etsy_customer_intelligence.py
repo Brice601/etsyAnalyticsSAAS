@@ -34,9 +34,12 @@ st.set_page_config(
 # ========== NOUVEAU : VÉRIFICATION D'ACCÈS ==========
 user_info = check_access()
 
+# Récupérer le customer_id (UUID)
+customer_id = user_info.get('id')
+
 # Vérifier l'accès à ce dashboard spécifique
-if not has_access_to_dashboard(user_info['access_key'], 'customer_intelligence'):
-    show_upgrade_message('customer_intelligence', user_info['product'])
+if not has_access_to_dashboard(customer_id, 'customer_intelligence'):
+    show_upgrade_message('customer_intelligence', customer_id)
     st.stop()
 # ====================================================
 
