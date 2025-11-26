@@ -115,8 +115,8 @@ st.markdown('<p class="main-header">🏠 Etsy Analytics Pro</p>', unsafe_allow_h
 st.markdown('<p class="subtitle">Transformez vos données Etsy en décisions rentables</p>', unsafe_allow_html=True)
 
 # ========== INFOS UTILISATEUR ==========
-product_name = "Starter Pack" if user_info['product'] == 'starter' else "Growth Bundle"
-product_class = "starter" if user_info['product'] == 'finance' or 'seo' or 'customer' else "bundle"
+product_name = "Growth Bundle" if user_info['product'] == 'bundle' else "Starter Pack"
+product_class = "bundle" if user_info['product'] == 'bundle' else "starter"
 
 st.markdown(f"""
 <div class="user-info">
