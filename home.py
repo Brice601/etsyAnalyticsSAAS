@@ -116,7 +116,7 @@ st.markdown('<p class="subtitle">Transformez vos données Etsy en décisions ren
 
 # ========== INFOS UTILISATEUR ==========
 product_name = "Starter Pack" if user_info['product'] == 'starter' else "Growth Bundle"
-product_class = "starter" if user_info['product'] == 'finance' | 'seo' | 'customer' else "bundle"
+product_class = "starter" if user_info['product'] == 'finance' or 'seo' or 'customer' else "bundle"
 
 st.markdown(f"""
 <div class="user-info">
