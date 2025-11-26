@@ -2,15 +2,13 @@ import streamlit as st
 from datetime import datetime
 
 # 🔥 MODE DEBUG : Affiche les étapes de connexion
-DEBUG_MODE = False  # ACTIVÉ pour diagnostic
+DEBUG_MODE = False  # Mettre à True pour diagnostic
 
 # Configuration des dashboards par produit
 DASHBOARD_ACCESS = {
-    'starter': ['finance_pro'],
-    'bundle': ['finance_pro', 'customer_intelligence', 'seo_analyzer'],
     'finance': ['finance_pro'],
-    'marketing': ['customer_intelligence'],
-    'operations': ['seo_analyzer']
+    'customer': ['customer_intelligence'],
+    'seo': ['seo_analyzer']
 }
 
 # Noms lisibles des dashboards
@@ -18,6 +16,14 @@ DASHBOARD_NAMES = {
     'finance_pro': 'Finance Pro',
     'customer_intelligence': 'Customer Intelligence',
     'seo_analyzer': 'SEO Analyzer'
+}
+
+# Liens d'achat Stripe par dashboard
+PURCHASE_LINKS = {
+    'finance_pro': 'https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03',
+    'customer_intelligence': 'https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02',
+    'seo_analyzer': 'https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01',
+    'bundle': 'https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00'
 }
 
 
@@ -32,7 +38,6 @@ def get_supabase_client():
     debug_log("Tentative de connexion à Supabase...")
     
     try:
-        # Vérifier que les secrets existent
         if "supabase" not in st.secrets:
             st.error("❌ Secrets Supabase non configurés dans Streamlit Cloud")
             st.info("Allez dans Settings > Secrets et ajoutez :\n```toml\n[supabase]\nurl = \"...\"\nkey = \"...\"\n```")
@@ -44,12 +49,10 @@ def get_supabase_client():
         url = st.secrets["supabase"]["url"]
         key = st.secrets["supabase"]["key"]
         
-        # Masquer la clé pour la sécurité
         masked_key = key[:20] + "..." if len(key) > 20 else "***"
         debug_log(f"URL: {url}")
         debug_log(f"Key: {masked_key}")
         
-        # Import Supabase
         try:
             from supabase import create_client
             debug_log("Module supabase importé avec succès")
@@ -59,13 +62,9 @@ def get_supabase_client():
             debug_log(f"Erreur import supabase: {e}")
             return None
         
-        # Créer le client
         debug_log("Création du client Supabase...")
         client = create_client(url, key)
         debug_log("✅ Client Supabase créé avec succès")
-        
-        # PAS DE TEST DE CONNEXION ICI
-        # Le test sera fait lors de la première vraie requête
         
         return client
         
@@ -107,17 +106,15 @@ def check_access():
         - Cliquez sur le lien d'accès unique fourni
         
         **Pas encore client ?**
-        - [Acheter le dashboard Finance pro - 29€](https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03)
-        - [Acheter le dashboard Customer Intelligence - 29€](https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02)
-        - [Acheter le dashboard SEO analyzer - 29€](https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01)
-        - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00) ⭐ Recommandé
+        - [Finance Pro - 29€](https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03)
+        - [Customer Intelligence - 29€](https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02)
+        - [SEO Analyzer - 29€](https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01)
+        - [Growth Bundle - 67€](https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00) ⭐ Pack complet
         
         ---
         
         **🧪 MODE TEST :**
         Ajoutez `?key=VOTRE_CLE` à l'URL
-        
-        Exemple : `https://votre-app.streamlit.app/?key=test123`
         """)
         st.stop()
     
@@ -136,7 +133,6 @@ def check_access():
         # Requête pour vérifier la clé
         debug_log(f"Recherche de la clé '{access_key}' dans la table customers...")
         
-        # 🔥 CORRECTION : Utiliser .execute() sans .data d'abord
         response = supabase.table('customers') \
             .select('*') \
             .eq('access_key', access_key) \
@@ -144,7 +140,6 @@ def check_access():
         
         debug_log(f"Réponse brute: {response}")
         
-        # Vérifier si response.data existe et contient des données
         if not hasattr(response, 'data') or not response.data or len(response.data) == 0:
             debug_log("Clé d'accès non trouvée dans la base")
             st.error("❌ Clé d'accès invalide")
@@ -158,10 +153,10 @@ def check_access():
             - Contactez le support si le problème persiste : support@architecte-ia.fr
             
             **Acheter un accès :**
-            - [Starter Pack Finance pro - 29€](https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03)
-            - [Starter Pack Customer Intelligence - 29€](https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02)
-            - [Starter Pack SEO analyzer - 29€](https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01)
-            - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00)
+            - [Finance Pro - 29€](https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03)
+            - [Customer Intelligence - 29€](https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02)
+            - [SEO Analyzer - 29€](https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01)
+            - [Growth Bundle - 67€](https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00)
             """)
             st.stop()
         
@@ -169,7 +164,7 @@ def check_access():
         user_info = response.data[0]
         user_info['access_key'] = access_key
         
-        debug_log(f"✅ Utilisateur trouvé: {user_info.get('email')} - Produit: {user_info.get('product')}")
+        debug_log(f"✅ Utilisateur trouvé: {user_info.get('email')}")
         
         # Mettre à jour la dernière connexion
         debug_log("Mise à jour last_login...")
@@ -181,7 +176,6 @@ def check_access():
             debug_log("✅ last_login mis à jour")
         except Exception as update_error:
             debug_log(f"⚠️ Erreur mise à jour last_login: {update_error}")
-            # Ne pas bloquer si la mise à jour échoue
         
         # Sauvegarder dans session_state
         st.session_state['access_key'] = access_key
@@ -196,13 +190,151 @@ def check_access():
         st.code(str(e))
         debug_log(f"❌ Erreur dans check_access: {e}")
         
-        # Afficher plus d'infos en mode debug
         if DEBUG_MODE:
             import traceback
             st.code(traceback.format_exc())
         
         st.info("💡 Si le problème persiste, contactez le support : support@architecte-ia.fr")
         st.stop()
+
+
+def get_user_products(customer_id):
+    """
+    Retourne la liste des produits achetés par l'utilisateur.
+    Retourne ['finance', 'customer', 'seo'] ou combinaisons
+    """
+    debug_log(f"Récupération produits pour customer_id: {customer_id}")
+    
+    try:
+        supabase = get_supabase_client()
+        
+        if supabase is None:
+            return []
+        
+        response = supabase.table('customer_products') \
+            .select('product_id') \
+            .eq('customer_id', customer_id) \
+            .execute()
+        
+        if not response.data:
+            debug_log("Aucun produit trouvé")
+            return []
+        
+        products = [p['product_id'] for p in response.data]
+        debug_log(f"Produits trouvés: {products}")
+        
+        return products
+        
+    except Exception as e:
+        st.warning(f"⚠️ Erreur récupération produits : {e}")
+        debug_log(f"Erreur get_user_products: {e}")
+        return []
+
+
+def has_access_to_dashboard(customer_id, dashboard_id):
+    """
+    Vérifie si un utilisateur a accès à un dashboard spécifique.
+    dashboard_id: 'finance_pro', 'customer_intelligence', 'seo_analyzer'
+    """
+    debug_log(f"Vérification accès au dashboard '{dashboard_id}' pour customer_id {customer_id}")
+    
+    user_products = get_user_products(customer_id)
+    
+    # Vérifier si l'utilisateur a le bundle (= accès à tout)
+    if 'bundle' in user_products:
+        debug_log("Utilisateur a le bundle → accès complet")
+        return True
+    
+    # Vérifier chaque produit individuel
+    for product_id, dashboards in DASHBOARD_ACCESS.items():
+        if product_id in user_products and dashboard_id in dashboards:
+            debug_log(f"Accès accordé via produit '{product_id}'")
+            return True
+    
+    debug_log("Aucun accès trouvé")
+    return False
+
+
+def get_user_dashboards(customer_id):
+    """
+    Retourne la liste des dashboards accessibles pour un utilisateur.
+    Retourne ['finance_pro', 'customer_intelligence', 'seo_analyzer'] ou combinaisons
+    """
+    debug_log(f"Récupération dashboards pour customer_id {customer_id}")
+    
+    user_products = get_user_products(customer_id)
+    
+    # Si l'utilisateur a le bundle, il a accès à tout
+    if 'bundle' in user_products:
+        all_dashboards = list(DASHBOARD_NAMES.keys())
+        debug_log(f"Bundle détecté → tous les dashboards: {all_dashboards}")
+        return all_dashboards
+    
+    # Sinon, récupérer les dashboards des produits individuels
+    dashboards = []
+    for product_id in user_products:
+        if product_id in DASHBOARD_ACCESS:
+            dashboards.extend(DASHBOARD_ACCESS[product_id])
+    
+    dashboards = list(set(dashboards))  # Éliminer les doublons
+    debug_log(f"Dashboards accessibles: {dashboards}")
+    
+    return dashboards
+
+
+def show_upgrade_message(dashboard_id, customer_id):
+    """
+    Affiche un message d'achat pour débloquer un dashboard.
+    """
+    dashboard_name = DASHBOARD_NAMES.get(dashboard_id, dashboard_id)
+    user_products = get_user_products(customer_id)
+    
+    st.error(f"❌ Accès refusé au dashboard : {dashboard_name}")
+    
+    # Compter combien de dashboards l'utilisateur possède
+    num_owned = len(user_products)
+    
+    if num_owned == 0:
+        # Utilisateur sans produits (ne devrait pas arriver)
+        st.markdown(f"""
+        ### 🔒 Dashboard non disponible
+        
+        Vous n'avez pas encore de dashboard actif.
+        
+        [🛒 Acheter {dashboard_name} - 29€]({PURCHASE_LINKS.get(dashboard_id, '#')})
+        
+        ou
+        
+        [🎁 Growth Bundle - 67€]({PURCHASE_LINKS['bundle']}) (3 dashboards)
+        """)
+    
+    elif num_owned == 1:
+        # Utilisateur avec 1 dashboard
+        st.markdown(f"""
+        ### 🔒 Dashboard réservé
+        
+        Le dashboard **{dashboard_name}** n'est pas inclus dans votre pack actuel.
+        
+        #### Options :
+        
+        1️⃣ **Acheter ce dashboard** → [29€]({PURCHASE_LINKS.get(dashboard_id, '#')})
+        
+        2️⃣ **Growth Bundle complet** → [67€]({PURCHASE_LINKS['bundle']}) (3 dashboards - Meilleure offre !)
+        """)
+    
+    elif num_owned == 2:
+        # Utilisateur avec 2 dashboards
+        st.markdown(f"""
+        ### 🔒 Il ne vous manque plus qu'un dashboard !
+        
+        Vous avez déjà **2 dashboards**. Complétez votre collection !
+        
+        [🛒 Acheter {dashboard_name} - 29€]({PURCHASE_LINKS.get(dashboard_id, '#')})
+        
+        💡 **Vous aurez alors les 3 dashboards pour 87€ total**
+        """)
+    
+    st.stop()
 
 
 def save_consent(email, consent_value):
@@ -230,113 +362,10 @@ def save_consent(email, consent_value):
         return False
 
 
-def has_access_to_dashboard(access_key, dashboard_id):
-    """
-    Vérifie si un utilisateur a accès à un dashboard spécifique.
-    """
-    debug_log(f"Vérification accès au dashboard '{dashboard_id}' pour clé {access_key}")
-    
-    try:
-        supabase = get_supabase_client()
-        
-        if supabase is None:
-            debug_log("Pas de connexion Supabase")
-            return False
-        
-        response = supabase.table('customers') \
-            .select('product') \
-            .eq('access_key', access_key) \
-            .execute()
-        
-        if not response.data:
-            debug_log("Utilisateur non trouvé")
-            return False
-        
-        user_product = response.data[0].get('product', 'starter')
-        allowed_dashboards = DASHBOARD_ACCESS.get(user_product, [])
-        
-        has_access = dashboard_id in allowed_dashboards
-        debug_log(f"Produit: {user_product} - Accès au dashboard: {has_access}")
-        
-        return has_access
-        
-    except Exception as e:
-        st.warning(f"⚠️ Erreur vérification accès : {e}")
-        debug_log(f"Erreur has_access_to_dashboard: {e}")
-        return False
-
-
-def get_user_dashboards(access_key):
-    """Retourne la liste des dashboards accessibles pour un utilisateur."""
-    debug_log(f"Récupération dashboards pour clé {access_key}")
-    
-    try:
-        supabase = get_supabase_client()
-        
-        if supabase is None:
-            return []
-        
-        response = supabase.table('customers') \
-            .select('product') \
-            .eq('access_key', access_key) \
-            .execute()
-        
-        if not response.data:
-            return []
-        
-        user_product = response.data[0].get('product', 'starter')
-        dashboards = DASHBOARD_ACCESS.get(user_product, [])
-        
-        debug_log(f"Produit: {user_product} - Dashboards: {dashboards}")
-        
-        return dashboards
-        
-    except Exception as e:
-        st.warning(f"⚠️ Erreur récupération dashboards : {e}")
-        debug_log(f"Erreur get_user_dashboards: {e}")
-        return []
-
-
-def show_upgrade_message(dashboard_id, current_product):
-    """Affiche un message d'upgrade si l'utilisateur n'a pas accès au dashboard."""
-    dashboard_name = DASHBOARD_NAMES.get(dashboard_id, dashboard_id)
-    
-    st.error(f"❌ Accès refusé au dashboard : {dashboard_name}")
-    
-    if current_product in ['starter', 'finance', 'marketing', 'operations']:
-        st.markdown(f"""
-        ### 🔒 Dashboard réservé au Growth Bundle
-        
-        Le dashboard **{dashboard_name}** est disponible uniquement avec le **Growth Bundle**.
-        
-        **Vous avez actuellement : {current_product.title()}**
-        
-        #### 🎁 Passez au Growth Bundle pour débloquer :
-        
-        ✅ **Tous les dashboards (3)**
-        ✅ **Accès IA en avant-première**  
-        ✅ **Support prioritaire**  
-        ✅ **Mises à jour gratuites**
-        
-        ---
-        
-        💰 **Prix upgrade : 38€ seulement**  
-        (au lieu de 67€ - vous économisez 29€)
-        
-        [🔥 Upgrader maintenant](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)
-        
-        ---
-        
-        **Questions ?** Contactez-nous : support@architecte-ia.fr
-        """)
-    
-    st.stop()
-
-
 def get_user_consent(email):
     """
     Récupère le statut de consentement d'un utilisateur.
-    ✅ CORRIGÉ : Retourne None si jamais demandé, True/False sinon
+    Retourne None si jamais demandé, True/False sinon
     """
     debug_log(f"Récupération consentement pour {email}")
     
@@ -344,7 +373,7 @@ def get_user_consent(email):
         supabase = get_supabase_client()
         
         if supabase is None:
-            return None  # ✅ Retourner None au lieu de False
+            return None
         
         response = supabase.table('customers') \
             .select('data_consent') \
@@ -352,20 +381,14 @@ def get_user_consent(email):
             .execute()
         
         if response.data:
-            # ✅ IMPORTANT : Distinguer "pas de consentement" de "jamais demandé"
             consent = response.data[0].get('data_consent')
-            
-            # Si consent est None, l'utilisateur n'a jamais été sollicité
-            # Si consent est False, l'utilisateur a refusé
-            # Si consent est True, l'utilisateur a accepté
-            
             debug_log(f"Consentement: {consent}")
-            return consent  # Peut être None, True ou False
+            return consent
         
         debug_log("Utilisateur non trouvé")
-        return None  # ✅ Retourner None au lieu de False
+        return None
         
     except Exception as e:
         st.warning(f"⚠️ Erreur récupération consentement : {e}")
         debug_log(f"Erreur get_user_consent: {e}")
-        return None  # ✅ Retourner None au lieu de False
+        return None

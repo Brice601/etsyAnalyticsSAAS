@@ -1,5 +1,4 @@
 import streamlit as st
-import json
 import sys
 import os
 
@@ -7,7 +6,13 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from auth.access_manager import check_access, has_access_to_dashboard
+    from auth.access_manager import (
+        check_access, 
+        has_access_to_dashboard, 
+        get_user_products,
+        get_user_dashboards,
+        PURCHASE_LINKS
+    )
 except ImportError as e:
     st.error(f"❌ Erreur d'import : {e}")
     st.stop()
@@ -42,7 +47,6 @@ st.markdown("""
         border-radius: 15px;
         color: white;
         margin: 1rem 0;
-        cursor: pointer;
         transition: transform 0.3s ease;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
@@ -62,7 +66,6 @@ st.markdown("""
     .dashboard-card.locked {
         background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
         opacity: 0.7;
-        cursor: not-allowed;
     }
     .dashboard-card h3 {
         font-size: 2rem;
@@ -92,17 +95,54 @@ st.markdown("""
         font-weight: bold;
         margin-top: 0.5rem;
     }
-    .badge.starter {
+    .badge.partial {
         background-color: #ffc107;
         color: #000;
     }
-    .badge.bundle {
+    .badge.complete {
         background-color: #28a745;
         color: #fff;
     }
-    .badge.locked {
-        background-color: #6c757d;
-        color: #fff;
+    .buy-button {
+        width: 100%;
+        padding: 0.75rem;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        cursor: pointer;
+        font-weight: bold;
+        text-align: center;
+        text-decoration: none;
+        display: block;
+        margin-top: 1rem;
+    }
+    .buy-button:hover {
+        background: #218838;
+    }
+    .access-button {
+        width: 100%;
+        padding: 0.75rem;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        cursor: pointer;
+        font-weight: bold;
+        text-align: center;
+        text-decoration: none;
+        display: block;
+        margin-top: 1rem;
+    }
+    .access-button.finance {
+        background: #F56400;
+    }
+    .access-button.customer {
+        background: #667eea;
+    }
+    .access-button.seo {
+        background: #f5576c;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -110,31 +150,52 @@ st.markdown("""
 # ========== VÉRIFICATION D'ACCÈS ==========
 user_info = check_access()
 
+# Récupérer customer_id
+customer_id = user_info.get('id')
+
+# Récupérer les produits de l'utilisateur
+user_products = get_user_products(customer_id)
+user_dashboards = get_user_dashboards(customer_id)
+
 # ========== EN-TÊTE ==========
 st.markdown('<p class="main-header">🏠 Etsy Analytics Pro</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Transformez vos données Etsy en décisions rentables</p>', unsafe_allow_html=True)
 
 # ========== INFOS UTILISATEUR ==========
-product_name = "Growth Bundle" if user_info['product'] == 'bundle' else "Starter Pack"
-product_class = "bundle" if user_info['product'] == 'bundle' else "starter"
+num_dashboards = len(user_dashboards)
+
+if 'bundle' in user_products or num_dashboards >= 3:
+    badge_html = '<span class="badge complete">✅ Growth Bundle Complet</span>'
+    status_message = f"Vous avez accès aux **3 dashboards** !"
+elif num_dashboards == 2:
+    badge_html = '<span class="badge partial">⚡ 2 dashboards</span>'
+    status_message = f"Il vous manque **1 dashboard** pour le pack complet"
+elif num_dashboards == 1:
+    badge_html = '<span class="badge partial">🚀 1 dashboard</span>'
+    status_message = f"Débloquez **2 dashboards supplémentaires** pour booster vos ventes"
+else:
+    badge_html = '<span class="badge partial">❌ Aucun dashboard</span>'
+    status_message = "Commencez par acheter votre premier dashboard"
 
 st.markdown(f"""
 <div class="user-info">
     ✅ <strong>Connecté</strong> : {user_info['email']}
-    <span class="badge {product_class}">{product_name}</span>
+    {badge_html}
+    <br>
+    💎 {status_message}
 </div>
 """, unsafe_allow_html=True)
 
 # ========== NAVIGATION VERS LES DASHBOARDS ==========
 st.markdown("## 📊 Vos Dashboards")
 
-# Dashboard 1 : Finance Pro
 col1, col2, col3 = st.columns(3)
 
+# Dashboard 1 : Finance Pro
 with col1:
-    has_finance_access = has_access_to_dashboard(user_info['access_key'], 'finance_pro')
+    has_finance = has_access_to_dashboard(customer_id, 'finance_pro')
     
-    if has_finance_access:
+    if has_finance:
         st.markdown("""
         <div class="dashboard-card finance">
             <h3>💰 Finance Pro</h3>
@@ -148,22 +209,29 @@ with col1:
         </div>
         """, unsafe_allow_html=True)
         
-        # 🔥 CORRECTION : Utiliser un lien HTML avec le paramètre key
         finance_url = f"/etsy_finance_pro?key={user_info['access_key']}"
-        st.markdown(f'<a href="{finance_url}" target="_self"><button style="width:100%; padding:0.75rem; background:#F56400; color:white; border:none; border-radius:5px; font-size:1rem; cursor:pointer; font-weight:bold;">🚀 Accéder au Finance Pro</button></a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{finance_url}" target="_self" class="access-button finance">🚀 Accéder au Finance Pro</a>', unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="dashboard-card finance locked">
             <h3>💰 Finance Pro</h3>
             <p>Analysez votre rentabilité produit par produit</p>
-            <span class="badge locked">🔒 Disponible dans tous les packs</span>
+            <div class="feature-list">
+                ✅ Calcul automatique des marges<br>
+                ✅ Frais Etsy détaillés<br>
+                ✅ Rapport PDF exportable<br>
+                ✅ Recommandations IA
+            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        st.markdown(f'<a href="{PURCHASE_LINKS["finance_pro"]}" target="_blank" class="buy-button">🛒 Acheter Finance Pro - 29€</a>', unsafe_allow_html=True)
 
+# Dashboard 2 : Customer Intelligence
 with col2:
-    has_customer_access = has_access_to_dashboard(user_info['access_key'], 'customer_intelligence')
+    has_customer = has_access_to_dashboard(customer_id, 'customer_intelligence')
     
-    if has_customer_access:
+    if has_customer:
         st.markdown("""
         <div class="dashboard-card customer">
             <h3>👥 Customer Intelligence</h3>
@@ -178,24 +246,28 @@ with col2:
         """, unsafe_allow_html=True)
         
         customer_url = f"/etsy_customer_intelligence?key={user_info['access_key']}"
-        st.markdown(f'<a href="{customer_url}" target="_self"><button style="width:100%; padding:0.75rem; background:#667eea; color:white; border:none; border-radius:5px; font-size:1rem; cursor:pointer; font-weight:bold;">🚀 Accéder au Customer Intelligence</button></a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{customer_url}" target="_self" class="access-button customer">🚀 Accéder au Customer Intelligence</a>', unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="dashboard-card customer locked">
             <h3>👥 Customer Intelligence</h3>
             <p>Comprenez vos clients et fidélisez-les</p>
-            <span class="badge locked">🔒 Growth Bundle uniquement</span>
+            <div class="feature-list">
+                ✅ Profil géographique<br>
+                ✅ Analyse des avis clients<br>
+                ✅ Taux de fidélisation<br>
+                ✅ Clients à risque de churn
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("⬆️ Upgrader vers Growth Bundle", key="upgrade_customer"):
-            st.info("🎁 Passez au Growth Bundle pour débloquer ce dashboard !")
-            st.markdown("[🔥 Upgrader maintenant](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)")
+        st.markdown(f'<a href="{PURCHASE_LINKS["customer_intelligence"]}" target="_blank" class="buy-button">🛒 Acheter Customer Intelligence - 29€</a>', unsafe_allow_html=True)
 
+# Dashboard 3 : SEO Analyzer
 with col3:
-    has_seo_access = has_access_to_dashboard(user_info['access_key'], 'seo_analyzer')
+    has_seo = has_access_to_dashboard(customer_id, 'seo_analyzer')
     
-    if has_seo_access:
+    if has_seo:
         st.markdown("""
         <div class="dashboard-card seo">
             <h3>🔍 SEO Analyzer</h3>
@@ -210,65 +282,59 @@ with col3:
         """, unsafe_allow_html=True)
         
         seo_url = f"/etsy_seo_analyzer?key={user_info['access_key']}"
-        st.markdown(f'<a href="{seo_url}" target="_self"><button style="width:100%; padding:0.75rem; background:#f5576c; color:white; border:none; border-radius:5px; font-size:1rem; cursor:pointer; font-weight:bold;">🚀 Accéder au SEO Analyzer</button></a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{seo_url}" target="_self" class="access-button seo">🚀 Accéder au SEO Analyzer</a>', unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="dashboard-card seo locked">
             <h3>🔍 SEO Analyzer</h3>
             <p>Optimisez votre visibilité et explosez vos ventes</p>
-            <span class="badge locked">🔒 Growth Bundle uniquement</span>
+            <div class="feature-list">
+                ✅ Score SEO par listing<br>
+                ✅ Analyse des titres<br>
+                ✅ Efficacité des tags<br>
+                ✅ Recommandations IA
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("⬆️ Upgrader vers Growth Bundle", key="upgrade_seo"):
-            st.info("🎁 Passez au Growth Bundle pour débloquer ce dashboard !")
-            st.markdown("[🔥 Upgrader maintenant](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)")
+        st.markdown(f'<a href="{PURCHASE_LINKS["seo_analyzer"]}" target="_blank" class="buy-button">🛒 Acheter SEO Analyzer - 29€</a>', unsafe_allow_html=True)
 
-# ========== COMPARAISON DES PACKS ==========
+# ========== SUGGESTION BUNDLE SI INCOMPLET ==========
+if num_dashboards < 3 and 'bundle' not in user_products:
+    st.markdown("---")
+    st.info("💡 **Astuce :** Économisez en achetant le Growth Bundle (67€) plutôt que les dashboards séparément !")
+    st.markdown(f'<a href="{PURCHASE_LINKS["bundle"]}" target="_blank" class="buy-button">🎁 Acheter Growth Bundle - 67€ (au lieu de 87€)</a>', unsafe_allow_html=True)
+
+# ========== COMPARAISON DES OPTIONS ==========
 st.markdown("---")
-st.markdown("## 💎 Comparaison des Packs")
+st.markdown("## 💎 Options d'achat")
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
-    ### Starter Pack - 29€
+    ### Dashboards individuels - 29€/pièce
     
-    ✅ **Finance Pro Dashboard**
-    - Analyse complète de rentabilité
-    - Frais Etsy détaillés
-    - Rapport PDF exportable
-    - Recommandations IA
+    ✅ Achetez uniquement ce dont vous avez besoin
+    ✅ Accès immédiat et illimité
+    ✅ Mises à jour de sécurité incluses
+    ✅ Support email standard
     
-    ✅ **Guide PDF complet**
-    ✅ **Support email**
-    
-    ❌ Customer Intelligence
-    ❌ SEO Analyzer
-    ❌ Accès IA en avant-première
-    ❌ Support prioritaire
+    💰 **Prix total si 3 dashboards : 87€**
     """)
 
 with col2:
     st.markdown("""
     ### Growth Bundle - 67€ ⭐
     
-    ✅ **Tous les dashboards (3)**
-    - Finance Pro
-    - Customer Intelligence  
-    - SEO Analyzer
-    
-    ✅ **Accès IA en avant-première**
-    ✅ **Support prioritaire**
+    ✅ **Les 3 dashboards inclus**
+    ✅ Accès immédiat et illimité
     ✅ **Mises à jour gratuites**
-    ✅ **Nouvelles fonctionnalités en exclusivité**
+    ✅ **Support prioritaire**
+    ✅ **Accès IA en avant-première**
     
-    💰 **Économisez 30€** vs achat séparé
+    💰 **Économisez 20€** vs achat séparé
     """)
-
-if user_info['product'] == 'starter':
-    st.info("💡 **Vous avez le Starter Pack.** Passez au Growth Bundle pour débloquer tous les dashboards !")
-    st.markdown("[🔥 Upgrader maintenant - 38€ seulement](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)")
 
 # ========== GUIDE DE DÉMARRAGE ==========
 st.markdown("---")
@@ -312,10 +378,13 @@ with st.expander("❓ 3. Questions fréquentes", expanded=False):
     R : Non, chaque licence est personnelle et liée à votre email.
     
     **Q : Les mises à jour sont-elles incluses ?**
-    R : Oui pour le Growth Bundle. Le Starter Pack reçoit les mises à jour de sécurité uniquement.
+    R : Oui pour le Growth Bundle. Les dashboards individuels reçoivent les mises à jour de sécurité uniquement.
     
     **Q : Puis-je avoir un remboursement ?**
     R : Oui, garantie satisfait ou remboursé 30 jours sans condition.
+    
+    **Q : Puis-je acheter les dashboards séparément puis avoir le bundle ?**
+    R : Oui ! Vous pouvez acheter d'abord 1 ou 2 dashboards, puis compléter plus tard.
     """)
 
 # ========== SUPPORT ==========
