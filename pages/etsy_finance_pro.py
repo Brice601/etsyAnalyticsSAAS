@@ -485,7 +485,7 @@ with st.sidebar:
     
     st.markdown("### 📤 Import des données")
     uploaded_file = st.file_uploader(
-        "Importez votre export CSV Etsy",
+        "Importez votre export CSV Etsy (EtsySoldOrderItems.csv)",
         type=['csv'],
         help="Exportez vos données depuis Etsy > Boutique Manager > Statistiques"
     )
