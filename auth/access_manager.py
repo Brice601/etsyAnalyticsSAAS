@@ -107,8 +107,10 @@ def check_access():
         - Cliquez sur le lien d'accès unique fourni
         
         **Pas encore client ?**
-        - [Acheter le dashboard Finance - 29€](https://buy.stripe.com/starter)
-        - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/bundle) ⭐ Recommandé
+        - [Acheter le dashboard Finance pro - 29€](https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03)
+        - [Acheter le dashboard Customer Intelligence - 29€](https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02)
+        - [Acheter le dashboard SEO analyzer - 29€](https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01)
+        - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00) ⭐ Recommandé
         
         ---
         
@@ -156,8 +158,10 @@ def check_access():
             - Contactez le support si le problème persiste : support@architecte-ia.fr
             
             **Acheter un accès :**
-            - [Starter Pack - 29€](https://buy.stripe.com/starter)
-            - [Growth Bundle - 67€](https://buy.stripe.com/bundle)
+            - [Starter Pack Finance pro - 29€](https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03)
+            - [Starter Pack Customer Intelligence - 29€](https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02)
+            - [Starter Pack SEO analyzer - 29€](https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01)
+            - [Acheter le Growth Bundle - 67€](https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00)
             """)
             st.stop()
         
@@ -319,7 +323,7 @@ def show_upgrade_message(dashboard_id, current_product):
         💰 **Prix upgrade : 38€ seulement**  
         (au lieu de 67€ - vous économisez 29€)
         
-        [🔥 Upgrader maintenant](https://buy.stripe.com/upgrade)
+        [🔥 Upgrader maintenant](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)
         
         ---
         

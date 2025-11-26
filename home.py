@@ -190,7 +190,7 @@ with col2:
         
         if st.button("⬆️ Upgrader vers Growth Bundle", key="upgrade_customer"):
             st.info("🎁 Passez au Growth Bundle pour débloquer ce dashboard !")
-            st.markdown("[🔥 Upgrader maintenant](https://buy.stripe.com/bundle)")
+            st.markdown("[🔥 Upgrader maintenant](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)")
 
 with col3:
     has_seo_access = has_access_to_dashboard(user_info['access_key'], 'seo_analyzer')
@@ -222,7 +222,7 @@ with col3:
         
         if st.button("⬆️ Upgrader vers Growth Bundle", key="upgrade_seo"):
             st.info("🎁 Passez au Growth Bundle pour débloquer ce dashboard !")
-            st.markdown("[🔥 Upgrader maintenant](https://buy.stripe.com/bundle)")
+            st.markdown("[🔥 Upgrader maintenant](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)")
 
 # ========== COMPARAISON DES PACKS ==========
 st.markdown("---")
@@ -268,7 +268,7 @@ with col2:
 
 if user_info['product'] == 'starter':
     st.info("💡 **Vous avez le Starter Pack.** Passez au Growth Bundle pour débloquer tous les dashboards !")
-    st.markdown("[🔥 Upgrader maintenant - 38€ seulement](https://buy.stripe.com/upgrade)")
+    st.markdown("[🔥 Upgrader maintenant - 38€ seulement](https://buy.stripe.com/7sY28tgy55Igc7e3s17IY04)")
 
 # ========== GUIDE DE DÉMARRAGE ==========
 st.markdown("---")
