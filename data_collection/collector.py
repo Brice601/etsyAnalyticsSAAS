@@ -1,13 +1,7 @@
 """
-data_collection/collector.py - VERSION CORRIGÉE v2
+data_collection/collector.py - VERSION FINALE
 
-Module de collecte de données brutes (sans anonymisation).
-OPTIMISÉ : Détection des doublons par hash pour éviter les copies inutiles.
-
-CORRECTIONS v2 :
-1. Logique d'affichage du consentement réparée
-2. Initialisation correcte des variables de session
-3. Affichage du pop-up même si consent_asked n'existe pas encore
+CORRECTION : Gérer le cas où data_consent = false par défaut à la création
 """
 
 import streamlit as st
@@ -20,39 +14,38 @@ import json
 def show_data_opt_in(user_email):
     """
     Affiche le pop-up de consentement au premier upload.
-    ✅ CORRIGÉ v2 : Affichage garanti au premier passage
+    ✅ CORRIGÉ : Distingue false par défaut vs false explicite
     
     Args:
         user_email (str): Email de l'utilisateur
     """
-    # ✅ NOUVEAU : Vérifier d'abord dans la base de données
-    from auth.access_manager import get_user_consent
+    from auth.access_manager import get_user_consent_with_timestamp
     
-    # Récupérer le consentement depuis la base de données
-    db_consent = get_user_consent(user_email)
+    # Récupérer le consentement ET la date de dernière modification
+    consent_data = get_user_consent_with_timestamp(user_email)
     
-    # Si l'utilisateur a déjà répondu (base de données), sauvegarder en session et ne rien afficher
-    if db_consent is not None:  # None = pas de réponse, True/False = réponse donnée
-        if 'consent_asked' not in st.session_state:
+    if consent_data is not None:
+        db_consent = consent_data.get('data_consent')
+        consent_updated_at = consent_data.get('consent_updated_at')
+        
+        # Si consent_updated_at existe, l'utilisateur a VRAIMENT répondu
+        if consent_updated_at is not None:
             st.session_state.consent_asked = True
-        if 'data_consent' not in st.session_state:
             st.session_state.data_consent = db_consent
-        return
+            return
     
-    # ✅ CORRECTION PRINCIPALE : Initialiser consent_asked APRÈS la vérification DB
-    # Cela garantit qu'on affiche le pop-up si aucune réponse en DB
+    # Initialiser les variables de session
     if 'consent_asked' not in st.session_state:
         st.session_state.consent_asked = False
     
-    # Initialiser data_consent si nécessaire
     if 'data_consent' not in st.session_state:
         st.session_state.data_consent = False
     
-    # Si déjà demandé dans la session, ne rien afficher
+    # Si déjà demandé dans cette session, ne rien afficher
     if st.session_state.consent_asked:
         return
     
-    # ✅ AFFICHAGE DU POP-UP (si on arrive ici, c'est qu'on n'a ni DB ni session)
+    # Afficher le pop-up
     with st.expander("🤝 Aidez-nous à créer les prédictions IA", expanded=True):
         st.markdown("""
         ### Participez à la prochaine version avec IA !
@@ -87,7 +80,6 @@ def show_data_opt_in(user_email):
                 st.session_state.data_consent = True
                 st.session_state.consent_asked = True
                 
-                # Sauvegarder le consentement
                 from auth.access_manager import save_consent
                 save_consent(user_email, True)
                 
@@ -100,7 +92,6 @@ def show_data_opt_in(user_email):
                 st.session_state.data_consent = False
                 st.session_state.consent_asked = True
                 
-                # Sauvegarder le refus
                 from auth.access_manager import save_consent
                 save_consent(user_email, False)
                 
@@ -109,79 +100,31 @@ def show_data_opt_in(user_email):
 
 
 def get_file_hash(file_content):
-    """
-    Calcule le hash SHA256 d'un fichier pour détecter les doublons.
-    
-    Args:
-        file_content (bytes): Contenu du fichier
-    
-    Returns:
-        str: Hash SHA256 du fichier
-    """
+    """Calcule le hash SHA256 d'un fichier pour détecter les doublons."""
     return hashlib.sha256(file_content).hexdigest()
 
 
 def collect_raw_data(uploaded_files, user_email, template_name):
-    """
-    Collecte les fichiers bruts (sans anonymisation) si l'utilisateur a donné son consentement.
+    """Collecte les fichiers bruts si l'utilisateur a donné son consentement."""
     
-    Args:
-        uploaded_files (list or dict): Liste ou dictionnaire des fichiers uploadés
-        user_email (str): Email de l'utilisateur
-        template_name (str): Nom du template ('finance_pro', 'customer_intelligence', 'seo_analyzer')
-    
-    Returns:
-        bool: True si la collecte a réussi, False sinon
-    """
-    # 🔍 DEBUG
-    print(f"🔍 collect_raw_data appelé avec :")
-    print(f"  - user_email: {user_email}")
-    print(f"  - template_name: {template_name}")
-    print(f"  - uploaded_files type: {type(uploaded_files)}")
-    print(f"  - data_consent: {st.session_state.get('data_consent', False)}")
-    
-    # Vérifier le consentement
     if not st.session_state.get('data_consent', False):
-        print("⚠️ Pas de consentement - collecte annulée")
         return False
     
-    print("✅ Consentement OK - démarrage collecte")
-    
     try:
-        # Hash de l'email pour anonymiser l'utilisateur
         user_id = hashlib.sha256(user_email.encode()).hexdigest()
-        print(f"🔑 User ID (hash): {user_id[:20]}...")
         
-        # MODE DÉVELOPPEMENT : Sauvegarder localement
         if not _is_production():
-            print("📂 Mode LOCAL - sauvegarde locale")
-            result = save_files_locally(uploaded_files, user_id, template_name)
-            print(f"📊 Résultat sauvegarde locale: {result}")
-            return True
-        
-        # MODE PRODUCTION : Sauvegarder sur Supabase Storage
+            return save_files_locally(uploaded_files, user_id, template_name)
         else:
-            print("☁️ Mode PRODUCTION - sauvegarde Supabase")
-            result = save_files_to_supabase(uploaded_files, user_id, template_name)
-            print(f"📊 Résultat sauvegarde Supabase: {result}")
-            return result
+            return save_files_to_supabase(uploaded_files, user_id, template_name)
     
     except Exception as e:
         st.warning(f"⚠️ Erreur lors de la collecte de données : {e}")
-        print(f"❌ Exception dans collect_raw_data: {e}")
-        import traceback
-        print(traceback.format_exc())
         return False
 
 
 def _is_production():
-    """
-    Détecte si on est en production ou en local.
-    
-    Returns:
-        bool: True si en production (Streamlit Cloud), False sinon
-    """
-    # En production, on aura les secrets Supabase
+    """Détecte si on est en production ou en local."""
     try:
         return 'supabase' in st.secrets and st.secrets['supabase'].get('url')
     except:
@@ -189,16 +132,7 @@ def _is_production():
 
 
 def save_files_locally(uploaded_files, user_id, template_name):
-    """
-    Sauvegarde les fichiers localement (mode développement).
-    OPTIMISÉ : Détecte les doublons par hash.
-    
-    Args:
-        uploaded_files (list or dict): Fichiers uploadés
-        user_id (str): Hash de l'email utilisateur
-        template_name (str): Nom du template
-    """
-    # Créer le dossier de destination (SANS timestamp)
+    """Sauvegarde les fichiers localement (mode développement)."""
     data_dir = os.path.join(
         os.path.dirname(__file__), 
         '..', 
@@ -209,7 +143,6 @@ def save_files_locally(uploaded_files, user_id, template_name):
     )
     os.makedirs(data_dir, exist_ok=True)
     
-    # Charger l'historique des hashes
     hash_file = os.path.join(data_dir, '_file_hashes.json')
     if os.path.exists(hash_file):
         with open(hash_file, 'r') as f:
@@ -217,56 +150,37 @@ def save_files_locally(uploaded_files, user_id, template_name):
     else:
         file_hashes = {}
     
-    # Gérer différents formats d'input
     files_list = _normalize_files_input(uploaded_files)
-    
-    # Copier chaque fichier
     files_saved = 0
     files_skipped = 0
     
     for file in files_list:
         if file is not None:
-            # IMPORTANT : Réinitialiser le curseur AVANT de lire
             file.seek(0)
-            
-            # Lire le contenu du fichier
             file_content = file.read()
             
-            # Vérifier que le contenu n'est pas vide
             if len(file_content) == 0:
-                print(f"⚠️ Fichier vide ignoré : {file.name}")
                 file.seek(0)
                 continue
             
-            # Calculer le hash du fichier
             current_hash = get_file_hash(file_content)
             
-            # Vérifier si le fichier existe déjà avec le même contenu
             if file.name in file_hashes and file_hashes[file.name] == current_hash:
-                print(f"⏭️ Fichier déjà existant (hash identique) : {file.name}")
                 files_skipped += 1
                 file.seek(0)
                 continue
             
-            # Sauvegarder le fichier
             file_path = os.path.join(data_dir, file.name)
             with open(file_path, 'wb') as f:
                 f.write(file_content)
             
-            # Mettre à jour l'historique des hashes
             file_hashes[file.name] = current_hash
-            
             files_saved += 1
-            print(f"✅ Fichier sauvegardé : {file.name}")
-            
-            # Réinitialiser le curseur pour utilisation ultérieure
             file.seek(0)
     
-    # Sauvegarder l'historique des hashes
     with open(hash_file, 'w') as f:
         json.dump(file_hashes, f, indent=2)
     
-    # Sauvegarder metadata avec timestamp
     metadata_path = os.path.join(data_dir, '_metadata.txt')
     with open(metadata_path, 'a') as f:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -274,106 +188,67 @@ def save_files_locally(uploaded_files, user_id, template_name):
         f.write(f"Nouveaux fichiers : {files_saved}\n")
         f.write(f"Fichiers ignorés (doublons) : {files_skipped}\n")
     
-    # Confirmation discrète dans la console
-    print(f"✅ {files_saved} fichier(s) collecté(s) | {files_skipped} doublon(s) ignoré(s)")
+    return True
 
 
 def save_files_to_supabase(uploaded_files, user_id, template_name):
-    """
-    Sauvegarde les fichiers sur Supabase Storage (mode production).
-    OPTIMISÉ : Détecte les doublons par hash.
-    ✅ CORRIGÉ : Utilise service_role_key pour contourner RLS
-    
-    Args:
-        uploaded_files (list or dict): Fichiers uploadés
-        user_id (str): Hash de l'email utilisateur
-        template_name (str): Nom du template
-    """
+    """Sauvegarde les fichiers sur Supabase Storage (mode production)."""
     try:
-        # Import uniquement en production
         from supabase import create_client
         
-        # ✅ CORRECTION : Utiliser service_role_key au lieu de key
-        # La clé service_role contourne RLS et a tous les droits
         supabase = create_client(
             st.secrets["supabase"]["url"],
-            st.secrets["supabase"]["service_role_key"]  # ✅ CHANGÉ ICI
+            st.secrets["supabase"]["service_role_key"]
         )
         
-        # Chemin de base (SANS timestamp)
         base_path = f"raw_data/{user_id}/{template_name}/"
-        
-        # Télécharger l'historique des hashes depuis Supabase
         hash_file_path = base_path + "_file_hashes.json"
+        
         try:
             hash_data = supabase.storage.from_('user-data').download(hash_file_path)
             file_hashes = json.loads(hash_data.decode('utf-8'))
-            print("📥 Historique des hashes chargé")
         except:
             file_hashes = {}
-            print("📝 Nouvel historique de hashes")
         
-        # Gérer différents formats d'input
         files_list = _normalize_files_input(uploaded_files)
-        
-        # Upload chaque fichier
         files_saved = 0
         files_skipped = 0
-        files_errors = []
         
         for file in files_list:
             if file is not None:
-                # IMPORTANT : Réinitialiser le curseur AVANT de lire
                 file.seek(0)
-                
-                # Lire le contenu
                 file_content = file.read()
                 
-                # Vérifier que le contenu n'est pas vide
                 if len(file_content) == 0:
-                    print(f"⚠️ Fichier vide ignoré : {file.name}")
                     file.seek(0)
                     continue
                 
-                # Calculer le hash du fichier
                 current_hash = get_file_hash(file_content)
                 
-                # Vérifier si le fichier existe déjà avec le même contenu
                 if file.name in file_hashes and file_hashes[file.name] == current_hash:
-                    print(f"⏭️ Fichier déjà existant (hash identique) : {file.name}")
                     files_skipped += 1
                     file.seek(0)
                     continue
                 
-                # Chemin complet
                 file_path = base_path + file.name
                 
                 try:
-                    # Upload vers Supabase
-                    response = supabase.storage.from_('user-data').upload(
+                    supabase.storage.from_('user-data').upload(
                         file_path,
                         file_content,
                         file_options={
                             "content-type": file.type if hasattr(file, 'type') else "text/csv",
-                            "upsert": "true"  # Remplace si existe
+                            "upsert": "true"
                         }
                     )
                     
-                    # Mettre à jour l'historique des hashes
                     file_hashes[file.name] = current_hash
-                    
                     files_saved += 1
-                    print(f"✅ Fichier uploadé : {file.name}")
-                    
-                except Exception as upload_error:
-                    error_msg = str(upload_error)
-                    files_errors.append(f"{file.name}: {error_msg}")
-                    print(f"❌ Erreur upload {file.name}: {error_msg}")
+                except Exception as e:
+                    print(f"❌ Erreur upload {file.name}: {e}")
                 
-                # Réinitialiser le curseur
                 file.seek(0)
         
-        # Sauvegarder l'historique des hashes mis à jour
         try:
             hash_content = json.dumps(file_hashes, indent=2).encode('utf-8')
             supabase.storage.from_('user-data').upload(
@@ -384,16 +259,13 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
                     "upsert": "true"
                 }
             )
-            print("📤 Historique des hashes sauvegardé")
         except Exception as e:
             print(f"⚠️ Erreur sauvegarde hashes : {e}")
         
-        # Upload metadata avec timestamp
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             metadata_content = f"\n--- Upload {timestamp} ---\nNouveaux fichiers : {files_saved}\nFichiers ignorés (doublons) : {files_skipped}\n".encode()
             
-            # Récupérer l'ancien metadata pour append
             try:
                 old_metadata = supabase.storage.from_('user-data').download(base_path + "_metadata.txt")
                 metadata_content = old_metadata + metadata_content
@@ -411,55 +283,31 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
         except Exception as e:
             print(f"⚠️ Erreur metadata : {e}")
         
-        # Rapport final
-        if files_saved > 0 or files_skipped > 0:
-            print(f"✅ {files_saved} fichier(s) collecté(s) | {files_skipped} doublon(s) ignoré(s)")
-            return True
-        else:
-            if files_errors:
-                st.warning(f"⚠️ Erreurs upload : {', '.join(files_errors)}")
-            print("⚠️ Aucun fichier n'a pu être uploadé")
-            return False
+        return files_saved > 0 or files_skipped > 0
     
     except ImportError:
-        st.error("❌ Module supabase non installé. Impossible de collecter les données en production.")
+        st.error("❌ Module supabase non installé.")
         return False
     except Exception as e:
         st.warning(f"⚠️ Erreur Supabase : {e}")
-        print(f"❌ Erreur générale : {e}")
         return False
 
 
 def _normalize_files_input(uploaded_files):
-    """
-    Normalise l'input des fichiers en une liste.
-    
-    Args:
-        uploaded_files: dict, list, ou fichier unique
-    
-    Returns:
-        list: Liste de fichiers
-    """
+    """Normalise l'input des fichiers en une liste."""
     if uploaded_files is None:
         return []
     
     if isinstance(uploaded_files, dict):
         return [f for f in uploaded_files.values() if f is not None]
-    
     elif isinstance(uploaded_files, list):
         return [f for f in uploaded_files if f is not None]
-    
     else:
         return [uploaded_files]
 
 
 def show_consent_settings(user_email):
-    """
-    Permet à l'utilisateur de modifier son consentement dans les paramètres.
-    
-    Args:
-        user_email (str): Email de l'utilisateur
-    """
+    """Permet à l'utilisateur de modifier son consentement dans les paramètres."""
     from auth.access_manager import get_user_consent, save_consent
     
     current_consent = get_user_consent(user_email)
@@ -479,7 +327,6 @@ def show_consent_settings(user_email):
             st.session_state.data_consent = False
             st.success("✅ Consentement retiré. Nous ne collecterons plus vos données.")
             st.rerun()
-    
     else:
         st.info("ℹ️ Vous ne participez pas actuellement à la collecte de données.")
         st.markdown("""
