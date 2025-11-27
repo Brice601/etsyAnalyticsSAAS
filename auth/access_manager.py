@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import datetime
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 DASHBOARD_ACCESS = {
     'finance': ['finance_pro'],
@@ -18,8 +18,8 @@ DASHBOARD_NAMES = {
 PURCHASE_LINKS = {
     'finance_pro': 'https://buy.stripe.com/5kQ28t5TreeMdbi9Qp7IY03',
     'customer_intelligence': 'https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02',
-    'seo_analyzer': 'https://buy.stripe.com/test_14A6oA5Zee66cx663zgIo02',
-    'bundle': 'https://buy.stripe.com/test_dRm3co5Ze6DEdBa9fLgIo04'
+    'seo_analyzer': 'https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01',
+    'bundle': 'https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00'
 }
 
 
