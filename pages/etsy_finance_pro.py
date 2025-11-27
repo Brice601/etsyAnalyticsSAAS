@@ -809,12 +809,6 @@ else:
         from data_collection.collector import collect_raw_data
         if all_files:  # Seulement si on a des fichiers
             collect_result = collect_raw_data(all_files, user_info['email'], 'finance_pro')
-            
-            # 🔍 DEBUG : Afficher le résultat
-            if collect_result:
-                print("✅ Collecte réussie")
-            else:
-                print("⚠️ Collecte échouée ou ignorée")
         # ===================================================
         
         # Onglets principaux

@@ -23,14 +23,7 @@ PURCHASE_LINKS = {
 }
 
 
-def debug_log(message):
-    if DEBUG_MODE:
-        st.sidebar.info(f"🛠 DEBUG: {message}")
-
-
 def get_supabase_client():
-    debug_log("Tentative de connexion à Supabase...")
-    
     try:
         if "supabase" not in st.secrets:
             st.error("❌ Secrets Supabase non configurés")
@@ -41,7 +34,6 @@ def get_supabase_client():
         
         from supabase import create_client
         client = create_client(url, key)
-        debug_log("✅ Client Supabase créé avec succès")
         
         return client
         
@@ -51,8 +43,6 @@ def get_supabase_client():
 
 
 def check_access():
-    debug_log("=== DÉBUT CHECK_ACCESS ===")
-    
     if 'access_key' in st.session_state and st.session_state['access_key']:
         access_key = st.session_state['access_key']
     else:
@@ -92,8 +82,8 @@ def check_access():
                 .update({'last_login': datetime.now().isoformat()}) \
                 .eq('access_key', access_key) \
                 .execute()
-        except Exception as e:
-            debug_log(f"⚠️ Erreur mise à jour last_login: {e}")
+        except:
+            pass
         
         st.session_state['access_key'] = access_key
         st.session_state['user_info'] = user_info
@@ -196,7 +186,6 @@ def show_upgrade_message(dashboard_id, customer_id):
 def save_consent(email, consent_value):
     """
     Sauvegarde le consentement avec timestamp
-    ✅ AJOUT : consent_updated_at pour distinguer default vs explicite
     """
     try:
         supabase = get_supabase_client()
@@ -212,7 +201,6 @@ def save_consent(email, consent_value):
             .eq('email', email) \
             .execute()
         
-        debug_log(f"Consentement sauvegardé : {consent_value}")
         return True
     
     except Exception as e:
@@ -222,7 +210,7 @@ def save_consent(email, consent_value):
 
 def get_user_consent(email):
     """
-    Récupère UNIQUEMENT le statut de consentement (ancien comportement)
+    Récupère UNIQUEMENT le statut de consentement
     """
     try:
         supabase = get_supabase_client()
@@ -246,7 +234,7 @@ def get_user_consent(email):
 
 def get_user_consent_with_timestamp(email):
     """
-    ✅ NOUVEAU : Récupère le consentement ET le timestamp
+    Récupère le consentement ET le timestamp
     Permet de distinguer false par défaut vs false explicite
     
     Returns:
@@ -269,5 +257,4 @@ def get_user_consent_with_timestamp(email):
         return None
         
     except Exception as e:
-        debug_log(f"❌ Erreur get_user_consent_with_timestamp: {e}")
         return None
