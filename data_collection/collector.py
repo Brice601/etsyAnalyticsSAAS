@@ -1,12 +1,13 @@
 """
-data_collection/collector.py - VERSION CORRIGÉE
+data_collection/collector.py - VERSION CORRIGÉE v2
 
 Module de collecte de données brutes (sans anonymisation).
 OPTIMISÉ : Détection des doublons par hash pour éviter les copies inutiles.
 
-CORRECTIONS :
-1. Utilisation de service_role_key au lieu de key pour contourner RLS
-2. Gestion du consentement persistante (une seule fois)
+CORRECTIONS v2 :
+1. Logique d'affichage du consentement réparée
+2. Initialisation correcte des variables de session
+3. Affichage du pop-up même si consent_asked n'existe pas encore
 """
 
 import streamlit as st
@@ -19,7 +20,7 @@ import json
 def show_data_opt_in(user_email):
     """
     Affiche le pop-up de consentement au premier upload.
-    ✅ CORRIGÉ : Vérifie d'abord la base de données
+    ✅ CORRIGÉ v2 : Affichage garanti au premier passage
     
     Args:
         user_email (str): Email de l'utilisateur
@@ -27,22 +28,31 @@ def show_data_opt_in(user_email):
     # ✅ NOUVEAU : Vérifier d'abord dans la base de données
     from auth.access_manager import get_user_consent
     
-    # Si l'utilisateur a déjà répondu (base de données), ne rien afficher
+    # Récupérer le consentement depuis la base de données
     db_consent = get_user_consent(user_email)
+    
+    # Si l'utilisateur a déjà répondu (base de données), sauvegarder en session et ne rien afficher
     if db_consent is not None:  # None = pas de réponse, True/False = réponse donnée
-        st.session_state.consent_asked = True
-        st.session_state.data_consent = db_consent
+        if 'consent_asked' not in st.session_state:
+            st.session_state.consent_asked = True
+        if 'data_consent' not in st.session_state:
+            st.session_state.data_consent = db_consent
         return
     
-    # Vérifier si le consentement a déjà été demandé dans cette session
+    # ✅ CORRECTION PRINCIPALE : Initialiser consent_asked APRÈS la vérification DB
+    # Cela garantit qu'on affiche le pop-up si aucune réponse en DB
     if 'consent_asked' not in st.session_state:
         st.session_state.consent_asked = False
+    
+    # Initialiser data_consent si nécessaire
+    if 'data_consent' not in st.session_state:
+        st.session_state.data_consent = False
     
     # Si déjà demandé dans la session, ne rien afficher
     if st.session_state.consent_asked:
         return
     
-    # Afficher le pop-up
+    # ✅ AFFICHAGE DU POP-UP (si on arrive ici, c'est qu'on n'a ni DB ni session)
     with st.expander("🤝 Aidez-nous à créer les prédictions IA", expanded=True):
         st.markdown("""
         ### Participez à la prochaine version avec IA !
@@ -83,6 +93,7 @@ def show_data_opt_in(user_email):
                 
                 st.success("✅ Merci ! Vous contribuez à l'amélioration de l'outil.")
                 st.info("🎁 Vous recevrez un email dès que les prédictions IA seront disponibles.")
+                st.rerun()
         
         with col2:
             if st.button("❌ Non merci", use_container_width=True):
@@ -94,6 +105,7 @@ def show_data_opt_in(user_email):
                 save_consent(user_email, False)
                 
                 st.info("Pas de problème ! Vous pourrez toujours changer d'avis dans les paramètres.")
+                st.rerun()
 
 
 def get_file_hash(file_content):

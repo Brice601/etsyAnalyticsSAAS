@@ -40,6 +40,10 @@ if not has_access_to_dashboard(customer_id, 'finance_pro'):
     st.stop()
 # ====================================================
 
+# ========== AFFICHAGE POP-UP CONSENTEMENT ==========
+show_data_opt_in(user_info['email'])
+# ===================================================
+
 # Styles CSS personnalisés
 st.markdown("""
     <style>
@@ -734,11 +738,6 @@ else:
     
     if df is not None:
 
-        # ========== NOUVEAU : POP-UP OPT-IN ==========
-        # Afficher le pop-up au premier upload
-        show_data_opt_in(user_info['email'])
-        # ============================================
-
         # Appliquer la méthode de coûts choisie
         if cost_method == "Coût moyen par produit":
             df['Cost'] = avg_cost
@@ -790,32 +789,32 @@ else:
 
         # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
         # Collecter si l'utilisateur a donné son consentement
-        if st.session_state.get('data_consent', False):  # ✅ Changé : consent_asked → data_consent
-            # Récupérer TOUS les fichiers uploadés
-            all_files = {}
+        # if st.session_state.get('data_consent', False):  # ✅ Changé : consent_asked → data_consent
+        # Récupérer TOUS les fichiers uploadés
+        all_files = {}
+        
+        # Fichier principal (orderitems)
+        if uploaded_file is not None:
+            all_files['orderitems'] = uploaded_file
+        
+        # Fichier costs (si uploadé)
+        if cost_method == "Upload CSV avec coûts détaillés" and cost_file is not None:
+            all_files['costs'] = cost_file
+        
+        # Fichier relevé Etsy (si uploadé)
+        if fees_method == "Relevé mensuel Etsy (précis)" and statement_file is not None:
+            all_files['etsy_statement'] = statement_file
+        
+        # Collecter
+        from data_collection.collector import collect_raw_data
+        if all_files:  # Seulement si on a des fichiers
+            collect_result = collect_raw_data(all_files, user_info['email'], 'finance_pro')
             
-            # Fichier principal (orderitems)
-            if uploaded_file is not None:
-                all_files['orderitems'] = uploaded_file
-            
-            # Fichier costs (si uploadé)
-            if cost_method == "Upload CSV avec coûts détaillés" and cost_file is not None:
-                all_files['costs'] = cost_file
-            
-            # Fichier relevé Etsy (si uploadé)
-            if fees_method == "Relevé mensuel Etsy (précis)" and statement_file is not None:
-                all_files['etsy_statement'] = statement_file
-            
-            # Collecter
-            from data_collection.collector import collect_raw_data
-            if all_files:  # Seulement si on a des fichiers
-                collect_result = collect_raw_data(all_files, user_info['email'], 'finance_pro')
-                
-                # 🔍 DEBUG : Afficher le résultat
-                if collect_result:
-                    print("✅ Collecte réussie")
-                else:
-                    print("⚠️ Collecte échouée ou ignorée")
+            # 🔍 DEBUG : Afficher le résultat
+            if collect_result:
+                print("✅ Collecte réussie")
+            else:
+                print("⚠️ Collecte échouée ou ignorée")
         # ===================================================
         
         # Onglets principaux

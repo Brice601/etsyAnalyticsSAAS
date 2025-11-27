@@ -42,6 +42,10 @@ if not has_access_to_dashboard(customer_id, 'seo_analyzer'):
     st.stop()
 # ====================================================
 
+# ========== AFFICHAGE POP-UP CONSENTEMENT ==========
+show_data_opt_in(user_info['email'])
+# ===================================================
+
 # Styles CSS personnalisés
 st.markdown("""
     <style>
@@ -424,10 +428,6 @@ with st.sidebar:
 # Corps principal
 if listings_file is None:
 
-    # ========== NOUVEAU : POP-UP OPT-IN ==========
-    show_data_opt_in(user_info['email'])
-    # ============================================
-
     # Page d'accueil
     st.info("👆 Commencez par importer votre fichier de listings Etsy dans la barre latérale")
     
@@ -523,22 +523,22 @@ else:
                 seo_analysis['Revenue'] = seo_analysis['Revenue'].fillna(0)
 
         # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
-        if st.session_state.get('consent_asked', False):
+        # if st.session_state.get('consent_asked', False):
     # Récupérer TOUS les fichiers uploadés
-            all_files = {}
-            
-            # Fichier listings (principal)
-            if listings_file is not None:
-                all_files['listings'] = listings_file
-            
-            # Fichier sales (optionnel - pour croiser performances)
-            if sales_file is not None:
-                all_files['sales'] = sales_file
-            
-            # Collecter
-            from data_collection.collector import collect_raw_data
-            if all_files:  # Seulement si on a des fichiers
-                collect_raw_data(all_files, user_info['email'], 'seo_analyzer')
+        all_files = {}
+        
+        # Fichier listings (principal)
+        if listings_file is not None:
+            all_files['listings'] = listings_file
+        
+        # Fichier sales (optionnel - pour croiser performances)
+        if sales_file is not None:
+            all_files['sales'] = sales_file
+        
+        # Collecter
+        from data_collection.collector import collect_raw_data
+        if all_files:  # Seulement si on a des fichiers
+            collect_raw_data(all_files, user_info['email'], 'seo_analyzer')
         # ===================================================
         
         # Onglets

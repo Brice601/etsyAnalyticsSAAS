@@ -43,6 +43,10 @@ if not has_access_to_dashboard(customer_id, 'customer_intelligence'):
     st.stop()
 # ====================================================
 
+# ========== AFFICHAGE POP-UP CONSENTEMENT ==========
+show_data_opt_in(user_info['email'])
+# ===================================================
+
 # Styles CSS personnalisés
 st.markdown("""
     <style>
@@ -546,10 +550,6 @@ with st.sidebar:
 # Corps principal
 if orders_file is None:
 
-    # ========== NOUVEAU : POP-UP OPT-IN ==========
-    show_data_opt_in(user_info['email'])
-    # ============================================
-
     # Page d'accueil
     st.info("👆 Commencez par importer vos fichiers CSV Etsy dans la barre latérale")
     
@@ -636,26 +636,26 @@ else:
             all_words = extract_all_words(reviews_df)
 
         # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
-        if st.session_state.get('consent_asked', False):
-    # Récupérer TOUS les fichiers uploadés
-            all_files = {}
-            
-            # Fichier orders (principal)
-            if orders_file is not None:
-                all_files['orders'] = orders_file
-            
-            # Fichier items (optionnel)
-            if items_file is not None:
-                all_files['items'] = items_file
-            
-            # Fichier reviews (optionnel)
-            if reviews_file is not None:
-                all_files['reviews'] = reviews_file
-            
-            # Collecter
-            from data_collection.collector import collect_raw_data
-            if all_files:  # Seulement si on a des fichiers
-                collect_raw_data(all_files, user_info['email'], 'customer_intelligence')
+        # if st.session_state.get('consent_asked', False):
+        # Récupérer TOUS les fichiers uploadés
+        all_files = {}
+        
+        # Fichier orders (principal)
+        if orders_file is not None:
+            all_files['orders'] = orders_file
+        
+        # Fichier items (optionnel)
+        if items_file is not None:
+            all_files['items'] = items_file
+        
+        # Fichier reviews (optionnel)
+        if reviews_file is not None:
+            all_files['reviews'] = reviews_file
+        
+        # Collecter
+        from data_collection.collector import collect_raw_data
+        if all_files:  # Seulement si on a des fichiers
+            collect_raw_data(all_files, user_info['email'], 'customer_intelligence')
         # ===================================================
         
         # Onglets
