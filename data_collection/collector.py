@@ -53,7 +53,7 @@ def show_data_opt_in(user_email):
         En acceptant, vous nous aidez à entraîner notre modèle de prédictions pour améliorer l'outil.
         
         **Ce que nous collectons :**
-        - ✅ Vos données de ventes (anonymisées lors de l'utilisation)
+        - ✅ Vos données de ventes (anonymisées)
         - ✅ Catégories de produits
         - ✅ Évolutions mensuelles
         
@@ -63,7 +63,7 @@ def show_data_opt_in(user_email):
         - ❌ Informations personnelles identifiables
         
         **En échange :**
-        - 🎁 Accès gratuit aux prédictions IA (valeur 20€/mois)
+        - 🎁 Accès gratuit pendant 3 mois aux prédictions IA (valeur 20€/mois)
         - 🎁 Nouvelles fonctionnalités en avant-première
         - 🎁 Recommandations personnalisées améliorées
         
