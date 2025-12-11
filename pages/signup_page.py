@@ -306,19 +306,19 @@ with st.form("signup_form"):
                     st.session_state['user_info'] = customer
                     st.session_state['just_signed_up'] = True
                     
-                    # Redirection vers home
+                    # Redirection vers dashboard
                     st.success("🎉 Bienvenue ! Redirection en cours...")
                     st.markdown(f"""
                     <script>
                         setTimeout(function() {{
-                            window.location.href = "/home?key={customer['access_key']}";
+                            window.location.href = "/dashboard?key={customer['access_key']}";
                         }}, 2000);
                     </script>
                     """, unsafe_allow_html=True)
                     
                     # Bouton manuel si JS ne fonctionne pas
                     st.markdown(f"""
-                    <a href="/home?key={customer['access_key']}" target="_self" 
+                    <a href="/dashboard?key={customer['access_key']}" target="_self" 
                        style="display: block; background: #28a745; color: white; 
                               padding: 15px; border-radius: 10px; text-align: center; 
                               font-weight: bold; font-size: 1.2rem; text-decoration: none; 
@@ -369,13 +369,13 @@ with col2:
                             st.markdown(f"""
                             <script>
                                 setTimeout(function() {{
-                                    window.location.href = "/home?key={customer['access_key']}";
+                                    window.location.href = "/dashboard?key={customer['access_key']}";
                                 }}, 1500);
                             </script>
                             """, unsafe_allow_html=True)
                             
                             st.markdown(f"""
-                            <a href="/home?key={customer['access_key']}" target="_self" 
+                            <a href="/dashboard?key={customer['access_key']}" target="_self" 
                                style="display: block; background: #007bff; color: white; 
                                       padding: 15px; border-radius: 10px; text-align: center; 
                                       font-weight: bold; text-decoration: none; margin-top: 20px;">
