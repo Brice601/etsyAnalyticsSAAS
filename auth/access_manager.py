@@ -20,7 +20,7 @@ PURCHASE_LINKS = {
     # 'customer_intelligence': 'https://buy.stripe.com/9B600l3Lj3A82wEfaJ7IY02',
     # 'seo_analyzer': 'https://buy.stripe.com/5kQ6oJ4Pn4Ec0owfaJ7IY01',
     # 'bundle': 'https://buy.stripe.com/8x2bJ33Ljb2Ac7e2nX7IY00',
-    'insights': 'https://buy.stripe.com/PLACEHOLDER_INSIGHTS'  # TODO: Remplacer par le vrai lien Stripe
+    'insights': 'https://buy.stripe.com/8x2cN781zdaI3AI5A97IY06'  # TODO: Remplacer par le vrai lien Stripe
 }
 
 
