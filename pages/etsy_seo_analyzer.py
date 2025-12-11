@@ -19,7 +19,19 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # NOUVEAUX IMPORTS
-from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
+from auth.access_manager import (
+    check_access, 
+    has_access_to_dashboard, 
+    show_upgrade_message,
+    has_insights_subscription,
+    show_insights_upgrade_cta,
+    show_locked_recommendation,
+    check_usage_limit,
+    increment_usage,
+    show_usage_limit_message,
+    should_increment_usage,
+    increment_usage_with_timestamp
+)
 from data_collection.collector import show_data_opt_in
 
 # Configuration de la page
@@ -36,11 +48,11 @@ user_info = check_access()
 # Récupérer le customer_id (UUID)
 customer_id = user_info.get('id')
 
-# Vérifier l'accès à ce dashboard spécifique
-if not has_access_to_dashboard(customer_id, 'seo_analyzer'):
-    show_upgrade_message('seo_analyzer', customer_id)
-    st.stop()
-# ====================================================
+# # Vérifier l'accès à ce dashboard spécifique
+# if not has_access_to_dashboard(customer_id, 'seo_analyzer'):
+#     show_upgrade_message('seo_analyzer', customer_id)
+#     st.stop()
+# # ====================================================
 
 # ========== AFFICHAGE POP-UP CONSENTEMENT ==========
 show_data_opt_in(user_info['email'])
@@ -483,12 +495,31 @@ if listings_file is None:
         """)
 
 else:
+    # Après check_access()
+    usage_info = check_usage_limit(customer_id)
+
+    if not usage_info['allowed']:
+        show_usage_limit_message(usage_info)
+        st.stop()
+
     # Chargement des données
     listings_df = load_listings(listings_file)
     sales_df = None
     
     if sales_file is not None:
         sales_df = load_sales_data(sales_file)
+
+        # ========== INCRÉMENTER USAGE SI NÉCESSAIRE ==========
+        if should_increment_usage(customer_id):
+            increment_usage_with_timestamp(customer_id)
+            
+            # Rafraîchir usage_info
+            usage_info = check_usage_limit(customer_id)
+            
+            # Message discret pour utilisateurs gratuits
+            if not has_insights_subscription(customer_id):
+                st.info(f"📊 Analyse {usage_info['usage_count']}/{usage_info['limit']} cette semaine (reset dans {usage_info['days_until_reset']} jours)")
+        
     
     if listings_df is not None:
         
@@ -803,7 +834,58 @@ else:
         with tab4:
             st.markdown("## 📈 Analyse Avancée")
             
-            if sales_df is not None and 'Sales_Count' in seo_analysis.columns:
+            # Vérifier abonnement Insights
+            has_insights = has_insights_subscription(customer_id)
+            
+            if not has_insights:
+                # MODE GRATUIT : TEASER BLURRED
+                st.info("""
+                💎 **Fonctionnalités Insights disponibles avec l'abonnement 9€/mois :**
+                - 🎯 Corrélation Score SEO vs Ventes réelles
+                - 📊 Comparaison Best-sellers vs Non-vendeurs
+                - 📸 Impact nombre de photos sur performances
+                - 📅 Analyse temporelle (meilleurs jours/heures)
+                - ⚠️ Identification produits 0 vente à booster
+                - 💡 ROI de vos optimisations SEO
+                """)
+                
+                if sales_df is not None and 'Sales_Count' in seo_analysis.columns:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("### 🎯 Score SEO vs Ventes (preview)")
+                        st.markdown("""
+                        <div style='filter: blur(8px); pointer-events: none; user-select: none;'>
+                            <img src='https://via.placeholder.com/400x300/f0f2f6/666?text=Graphique+Score+SEO+vs+Ventes' style='width: 100%; border-radius: 10px;'>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown("### 📊 Comparaison Vendus vs Non-Vendus (preview)")
+                        st.markdown("""
+                        <div style='filter: blur(8px); pointer-events: none; user-select: none;'>
+                            <p><strong>Produits vendus :</strong> Score moyen 78/100</p>
+                            <p><strong>Produits non vendus :</strong> Score moyen 52/100</p>
+                            <p><strong>Écart :</strong> +26 points</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+                    st.markdown("### 📸 Impact Photos (preview)")
+                    st.markdown("""
+                    <div style='filter: blur(8px); pointer-events: none; user-select: none;'>
+                        <img src='https://via.placeholder.com/800x300/f0f2f6/666?text=Graphique+Photos+vs+Ventes' style='width: 100%; border-radius: 10px;'>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.warning("📊 Importez le fichier de ventes pour débloquer les analyses de performance")
+                
+                st.markdown("---")
+                show_insights_upgrade_cta()
+            
+            elif sales_df is not None and 'Sales_Count' in seo_analysis.columns:
+                # MODE PREMIUM : TOUT DÉBLOQUÉ
+                st.success("💎 **Insights Premium activé**")
                 
                 # Corrélation SEO Score vs Ventes
                 st.markdown("### 🎯 Impact du Score SEO sur les Ventes")
@@ -1048,6 +1130,15 @@ else:
                     sales_df['Hour'] = sales_df['Date'].dt.hour
                     best_hour = sales_df.groupby('Hour')['Price'].sum().idxmax()
                     
+                    # Calculer le meilleur jour
+                    sales_df['DayOfWeek'] = sales_df['Date'].dt.day_name()
+                    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                    day_names_fr = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
+                    
+                    daily_sales_rec = sales_df.groupby('DayOfWeek')['Price'].sum().reindex(day_order)
+                    best_day_idx = daily_sales_rec.idxmax()
+                    best_day = day_names_fr[day_order.index(best_day_idx)]
+                    
                     recommendations.append({
                         'priority': '🟢 INFO',
                         'title': 'Timing Optimal pour Nouveaux Listings',
@@ -1063,12 +1154,55 @@ else:
             # Affichage des recommandations
             st.markdown("### 🎯 Vos Actions Prioritaires")
             
-            for i, rec in enumerate(recommendations, 1):
-                with st.expander(f"{rec['priority']} - {rec['title']}", expanded=(i <= 2)):
-                    st.markdown(f"**{rec['detail']}**")
-                    st.markdown("**📋 Actions à prendre :**")
-                    for action in rec['actions']:
-                        st.markdown(f"- {action}")
+            # Vérifier abonnement Insights
+            has_insights = has_insights_subscription(customer_id)
+            
+            if not has_insights:
+                st.info("""
+                🎁 **1 recommandation gratuite débloquée**  
+                💎 **4+ recommandations premium disponibles avec Insights 9€/mois**
+                """)
+                
+                # Afficher la MEILLEURE recommandation (priorité HAUTE)
+                best_rec = None
+                for rec in recommendations:
+                    if rec['priority'] == '🔴 HAUTE':
+                        best_rec = rec
+                        break
+                
+                if best_rec is None and recommendations:
+                    best_rec = recommendations[0]
+                
+                if best_rec:
+                    with st.expander(f"✅ {best_rec['priority']} - {best_rec['title']}", expanded=True):
+                        st.markdown(f"**{best_rec['detail']}**")
+                        st.markdown("**📋 Actions à prendre :**")
+                        for action in best_rec['actions']:
+                            st.markdown(f"- {action}")
+                
+                # Afficher les autres LOCKÉES
+                st.markdown("---")
+                st.markdown("### 🔒 Recommandations Premium")
+                
+                locked_recs = [r for r in recommendations if r != best_rec][:4]
+                
+                for rec in locked_recs:
+                    show_locked_recommendation(rec['title'], rec['priority'])
+                
+                # CTA UPGRADE
+                st.markdown("---")
+                show_insights_upgrade_cta()
+            
+            else:
+                # MODE PAYANT : Toutes les recommandations
+                st.success("💎 **Insights Premium activé** - Toutes les recommandations débloquées")
+                
+                for i, rec in enumerate(recommendations, 1):
+                    with st.expander(f"{rec['priority']} - {rec['title']}", expanded=(i <= 2)):
+                        st.markdown(f"**{rec['detail']}**")
+                        st.markdown("**📋 Actions à prendre :**")
+                        for action in rec['actions']:
+                            st.markdown(f"- {action}")
             
             st.markdown("---")
             
@@ -1091,23 +1225,40 @@ else:
             for item in checklist:
                 st.checkbox(item)
         
-        # Export PDF
+        # ========== EXPORT PDF (PREMIUM ONLY) ==========
+        # Bouton d'export PDF
         st.markdown("---")
-        st.markdown("## 📄 Exporter le Rapport SEO")
-        
-        if st.button("📥 Générer le Rapport PDF", type="primary", width='stretch'):
-            with st.spinner("Génération du rapport en cours..."):
-                pdf_buffer = generate_seo_pdf_report(listings_df, seo_analysis, sales_df)
-                
-                st.download_button(
-                    label="⬇️ Télécharger le Rapport PDF",
-                    data=pdf_buffer,
-                    file_name=f"rapport_seo_etsy_{datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    width='stretch'
-                )
-                
-                st.success("✅ Rapport généré avec succès !")
+        st.markdown("## 📄 Exporter le rapport")
+
+        # Vérifier abonnement Insights
+        has_insights = has_insights_subscription(customer_id)
+
+        if not has_insights:
+            # MODE GRATUIT : Bloquer l'export
+            st.warning("🔒 **Export PDF réservé aux abonnés Insights Premium**")
+            
+            # Bouton blurré
+            st.markdown("""
+            <div style='filter: blur(3px); pointer-events: none;'>
+            """, unsafe_allow_html=True)
+            st.button("📥 Générer le rapport PDF", type="primary", use_container_width=True, disabled=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        else:
+            # MODE PAYANT : Export disponible
+            if st.button("📥 Générer le rapport PDF", type="primary", use_container_width=True):
+                with st.spinner("Génération du rapport en cours..."):
+                    pdf_buffer = generate_pdf_report(kpis, df, product_analysis)
+                    
+                    st.download_button(
+                        label="⬇️ Télécharger le rapport PDF",
+                        data=pdf_buffer,
+                        file_name=f"rapport_etsy_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                    
+                    st.success("✅ Rapport généré avec succès !")
 
 # Footer
 st.markdown("---")

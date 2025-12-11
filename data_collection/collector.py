@@ -1,7 +1,7 @@
 """
 data_collection/collector.py - VERSION FINALE
 
-CORRECTION : Gérer le cas où data_consent = false par défaut à la création
+Gestion de la collecte de données avec opt-in obligatoire
 """
 
 import streamlit as st
@@ -14,89 +14,15 @@ import json
 def show_data_opt_in(user_email):
     """
     Affiche le pop-up de consentement au premier upload.
-    ✅ CORRIGÉ : Distingue false par défaut vs false explicite
+    Le consentement est déjà vérifié dans check_access(), donc ici on informe juste l'utilisateur.
     
     Args:
         user_email (str): Email de l'utilisateur
     """
-    from auth.access_manager import get_user_consent_with_timestamp
-    
-    # Récupérer le consentement ET la date de dernière modification
-    consent_data = get_user_consent_with_timestamp(user_email)
-    
-    if consent_data is not None:
-        db_consent = consent_data.get('data_consent')
-        consent_updated_at = consent_data.get('consent_updated_at')
-        
-        # Si consent_updated_at existe, l'utilisateur a VRAIMENT répondu
-        if consent_updated_at is not None:
-            st.session_state.consent_asked = True
-            st.session_state.data_consent = db_consent
-            return
-    
-    # Initialiser les variables de session
-    if 'consent_asked' not in st.session_state:
-        st.session_state.consent_asked = False
-    
-    if 'data_consent' not in st.session_state:
-        st.session_state.data_consent = False
-    
-    # Si déjà demandé dans cette session, ne rien afficher
-    if st.session_state.consent_asked:
-        return
-    
-    # Afficher le pop-up
-    with st.expander("🤝 Aidez-nous à créer les prédictions IA", expanded=True):
-        st.markdown("""
-        ### Participez à la prochaine version avec IA !
-        
-        En acceptant, vous nous aidez à entraîner notre modèle de prédictions pour améliorer l'outil.
-        
-        **Ce que nous collectons :**
-        - ✅ Vos données de ventes (anonymisées)
-        - ✅ Catégories de produits
-        - ✅ Évolutions mensuelles
-        
-        **Ce que nous ne collectons JAMAIS :**
-        - ❌ Noms de clients
-        - ❌ Adresses email des clients
-        - ❌ Informations personnelles identifiables
-        
-        **En échange :**
-        - 🎁 Accès gratuit pendant 3 mois aux prédictions IA (valeur 20€/mois)
-        - 🎁 Nouvelles fonctionnalités en avant-première
-        - 🎁 Recommandations personnalisées améliorées
-        
-        ---
-        *Les données ne sont ni revendues, ni partagées avec des tiers.*  
-        *Elles sont traitées uniquement par notre algorithme pour améliorer l'outil.*  
-        *Vous pouvez retirer votre consentement à tout moment dans les paramètres.*
-        """)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("✅ J'accepte", use_container_width=True, type="primary"):
-                st.session_state.data_consent = True
-                st.session_state.consent_asked = True
-                
-                from auth.access_manager import save_consent
-                save_consent(user_email, True)
-                
-                st.success("✅ Merci ! Vous contribuez à l'amélioration de l'outil.")
-                st.info("🎁 Vous recevrez un email dès que les prédictions IA seront disponibles.")
-                st.rerun()
-        
-        with col2:
-            if st.button("❌ Non merci", use_container_width=True):
-                st.session_state.data_consent = False
-                st.session_state.consent_asked = True
-                
-                from auth.access_manager import save_consent
-                save_consent(user_email, False)
-                
-                st.info("Pas de problème ! Vous pourrez toujours changer d'avis dans les paramètres.")
-                st.rerun()
+    # Dans le nouveau modèle, le consentement est obligatoire dès l'inscription
+    # Donc ce pop-up n'est plus nécessaire
+    # On garde la fonction pour compatibilité mais elle ne fait rien
+    pass
 
 
 def get_file_hash(file_content):
@@ -105,14 +31,31 @@ def get_file_hash(file_content):
 
 
 def collect_raw_data(uploaded_files, user_email, template_name):
-    """Collecte les fichiers bruts si l'utilisateur a donné son consentement."""
+    """
+    Collecte les fichiers bruts si l'utilisateur a donné son consentement.
     
-    if not st.session_state.get('data_consent', False):
-        return False
+    Args:
+        uploaded_files: Peut être un dict, une liste, ou un seul fichier
+        user_email: Email de l'utilisateur
+        template_name: Nom du dashboard (finance_pro, customer_intelligence, seo_analyzer)
     
+    Returns:
+        bool: True si collecte réussie, False sinon
+    """
     try:
+        # Vérifier le consentement (déjà vérifié mais double check)
+        from auth.access_manager import get_supabase_client
+        
+        supabase = get_supabase_client()
+        if supabase:
+            response = supabase.table('customers').select('data_consent').eq('email', user_email).execute()
+            if not response.data or not response.data[0].get('data_consent'):
+                return False
+        
+        # Hash de l'email pour anonymisation
         user_id = hashlib.sha256(user_email.encode()).hexdigest()
         
+        # Déterminer le mode (production ou local)
         if not _is_production():
             return save_files_locally(uploaded_files, user_id, template_name)
         else:
@@ -143,6 +86,7 @@ def save_files_locally(uploaded_files, user_id, template_name):
     )
     os.makedirs(data_dir, exist_ok=True)
     
+    # Charger les hashes existants
     hash_file = os.path.join(data_dir, '_file_hashes.json')
     if os.path.exists(hash_file):
         with open(hash_file, 'r') as f:
@@ -150,6 +94,7 @@ def save_files_locally(uploaded_files, user_id, template_name):
     else:
         file_hashes = {}
     
+    # Normaliser les fichiers en liste
     files_list = _normalize_files_input(uploaded_files)
     files_saved = 0
     files_skipped = 0
@@ -165,11 +110,13 @@ def save_files_locally(uploaded_files, user_id, template_name):
             
             current_hash = get_file_hash(file_content)
             
+            # Vérifier si déjà uploadé
             if file.name in file_hashes and file_hashes[file.name] == current_hash:
                 files_skipped += 1
                 file.seek(0)
                 continue
             
+            # Sauvegarder le fichier
             file_path = os.path.join(data_dir, file.name)
             with open(file_path, 'wb') as f:
                 f.write(file_content)
@@ -178,15 +125,20 @@ def save_files_locally(uploaded_files, user_id, template_name):
             files_saved += 1
             file.seek(0)
     
+    # Sauvegarder les hashes
     with open(hash_file, 'w') as f:
         json.dump(file_hashes, f, indent=2)
     
+    # Sauvegarder metadata
     metadata_path = os.path.join(data_dir, '_metadata.txt')
     with open(metadata_path, 'a') as f:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         f.write(f"\n--- Upload {timestamp} ---\n")
         f.write(f"Nouveaux fichiers : {files_saved}\n")
         f.write(f"Fichiers ignorés (doublons) : {files_skipped}\n")
+    
+    if files_saved > 0:
+        st.success(f"✅ {files_saved} fichier(s) collecté(s) avec succès (local)")
     
     return True
 
@@ -204,12 +156,14 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
         base_path = f"raw_data/{user_id}/{template_name}/"
         hash_file_path = base_path + "_file_hashes.json"
         
+        # Charger les hashes existants
         try:
             hash_data = supabase.storage.from_('user-data').download(hash_file_path)
             file_hashes = json.loads(hash_data.decode('utf-8'))
         except:
             file_hashes = {}
         
+        # Normaliser les fichiers en liste
         files_list = _normalize_files_input(uploaded_files)
         files_saved = 0
         files_skipped = 0
@@ -225,11 +179,13 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
                 
                 current_hash = get_file_hash(file_content)
                 
+                # Vérifier si déjà uploadé
                 if file.name in file_hashes and file_hashes[file.name] == current_hash:
                     files_skipped += 1
                     file.seek(0)
                     continue
                 
+                # Upload vers Supabase
                 file_path = base_path + file.name
                 
                 try:
@@ -249,6 +205,7 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
                 
                 file.seek(0)
         
+        # Sauvegarder les hashes mis à jour
         try:
             hash_content = json.dumps(file_hashes, indent=2).encode('utf-8')
             supabase.storage.from_('user-data').upload(
@@ -262,6 +219,7 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
         except Exception as e:
             print(f"⚠️ Erreur sauvegarde hashes : {e}")
         
+        # Sauvegarder metadata
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             metadata_content = f"\n--- Upload {timestamp} ---\nNouveaux fichiers : {files_saved}\nFichiers ignorés (doublons) : {files_skipped}\n".encode()
@@ -283,6 +241,11 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
         except Exception as e:
             print(f"⚠️ Erreur metadata : {e}")
         
+        # if files_saved > 0:
+        #     st.success(f"✅ {files_saved} fichier(s) collecté(s) avec succès")
+        # elif files_skipped > 0:
+        #     st.info(f"ℹ️ {files_skipped} fichier(s) déjà collecté(s) (doublons ignorés)")
+        
         return files_saved > 0 or files_skipped > 0
     
     except ImportError:
@@ -294,7 +257,10 @@ def save_files_to_supabase(uploaded_files, user_id, template_name):
 
 
 def _normalize_files_input(uploaded_files):
-    """Normalise l'input des fichiers en une liste."""
+    """
+    Normalise l'input des fichiers en une liste.
+    Gère les cas : dict, list, ou single file.
+    """
     if uploaded_files is None:
         return []
     
@@ -307,37 +273,16 @@ def _normalize_files_input(uploaded_files):
 
 
 def show_consent_settings(user_email):
-    """Permet à l'utilisateur de modifier son consentement dans les paramètres."""
-    from auth.access_manager import get_user_consent, save_consent
+    """
+    OBSOLÈTE dans le nouveau modèle freemium.
+    Le consentement est obligatoire à l'inscription.
+    Garder pour compatibilité.
+    """
+    st.info("ℹ️ Le consentement de données est obligatoire pour utiliser la version gratuite.")
+    st.markdown("""
+    Votre consentement a été donné lors de l'inscription.
     
-    current_consent = get_user_consent(user_email)
+    Si vous souhaitez retirer votre consentement, contactez-nous à support@architecte-ia.fr
     
-    st.markdown("### 🤝 Gestion du consentement de données")
-    
-    if current_consent:
-        st.success("✅ Vous participez actuellement à l'amélioration de l'outil.")
-        st.markdown("""
-        **Merci de votre contribution !**
-        
-        Vous recevrez un accès gratuit aux prédictions IA dès leur sortie.
-        """)
-        
-        if st.button("❌ Retirer mon consentement"):
-            save_consent(user_email, False)
-            st.session_state.data_consent = False
-            st.success("✅ Consentement retiré. Nous ne collecterons plus vos données.")
-            st.rerun()
-    else:
-        st.info("ℹ️ Vous ne participez pas actuellement à la collecte de données.")
-        st.markdown("""
-        **En acceptant, vous aidez à créer les prédictions IA et recevez :**
-        - 🎁 Accès gratuit aux prédictions IA (20€/mois)
-        - 🎁 Nouvelles fonctionnalités en avant-première
-        - 🎁 Recommandations personnalisées améliorées
-        """)
-        
-        if st.button("✅ Accepter de participer"):
-            save_consent(user_email, True)
-            st.session_state.data_consent = True
-            st.success("✅ Merci ! Vous contribuez à l'amélioration de l'outil.")
-            st.rerun()
+    **Alternative :** Passez à Insights Premium (9€/mois) qui ne requiert pas de collecte de données.
+    """)

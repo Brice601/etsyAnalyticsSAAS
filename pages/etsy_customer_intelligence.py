@@ -20,7 +20,19 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # NOUVEAUX IMPORTS
-from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
+from auth.access_manager import (
+    check_access, 
+    has_access_to_dashboard, 
+    show_upgrade_message,
+    has_insights_subscription,
+    show_insights_upgrade_cta,
+    show_locked_recommendation,
+    check_usage_limit,
+    increment_usage,
+    show_usage_limit_message,
+    should_increment_usage,
+    increment_usage_with_timestamp
+)
 from data_collection.collector import show_data_opt_in
 
 # Configuration de la page
@@ -37,11 +49,11 @@ user_info = check_access()
 # Récupérer le customer_id (UUID)
 customer_id = user_info.get('id')
 
-# Vérifier l'accès à ce dashboard spécifique
-if not has_access_to_dashboard(customer_id, 'customer_intelligence'):
-    show_upgrade_message('customer_intelligence', customer_id)
-    st.stop()
-# ====================================================
+# # Vérifier l'accès à ce dashboard spécifique
+# if not has_access_to_dashboard(customer_id, 'customer_intelligence'):
+#     show_upgrade_message('customer_intelligence', customer_id)
+#     st.stop()
+# # ====================================================
 
 # ========== AFFICHAGE POP-UP CONSENTEMENT ==========
 show_data_opt_in(user_info['email'])
@@ -594,6 +606,13 @@ if orders_file is None:
         """)
 
 else:
+    # Après check_access()
+    usage_info = check_usage_limit(customer_id)
+
+    if not usage_info['allowed']:
+        show_usage_limit_message(usage_info)
+        st.stop()
+
     # Chargement des données
     orders_df = load_orders_data(orders_file)
     items_df = None
@@ -601,6 +620,18 @@ else:
     
     if items_file is not None:
         items_df = load_items_data(items_file)
+
+        # ========== INCRÉMENTER USAGE SI NÉCESSAIRE ==========
+        if should_increment_usage(customer_id):
+            increment_usage_with_timestamp(customer_id)
+            
+            # Rafraîchir usage_info
+            usage_info = check_usage_limit(customer_id)
+            
+            # Message discret pour utilisateurs gratuits
+            if not has_insights_subscription(customer_id):
+                st.info(f"📊 Analyse {usage_info['usage_count']}/{usage_info['limit']} cette semaine (reset dans {usage_info['days_until_reset']} jours)")
+        
     
     if reviews_file is not None:
         reviews_df = load_reviews_data(reviews_file)
@@ -1077,175 +1108,274 @@ else:
         with tab4:
             st.markdown("## 🔄 Fidélisation & Lifetime Value")
             
-            if customer_analysis is not None:
+            # Vérifier abonnement Insights
+            has_insights = has_insights_subscription(customer_id)
+            
+            if not has_insights:
+                # MODE GRATUIT : TEASER BLURRED
+                st.info("""
+                💎 **Fonctionnalités Premium disponibles avec Insights 9€/mois :**
+                - 📊 Taux de clients récurrents & LTV moyen
+                - 👥 Distribution nouveaux vs récurrents  
+                - ⚠️ Clients à risque de churn (90+ jours inactifs)
+                - 🏆 Top 10 clients VIP par CA
+                - ⏱️ Délai moyen entre deux achats
+                - 🎯 Actions de réactivation personnalisées
+                """)
                 
-                # KPIs
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
+                if customer_analysis is not None:
+                    # Calculer les métriques pour le teaser
                     repeat_customers = (customer_analysis['Num_Orders'] > 1).sum()
                     repeat_rate = (repeat_customers / len(customer_analysis) * 100) if len(customer_analysis) > 0 else 0
-                    st.metric("Taux Clients Récurrents", f"{repeat_rate:.1f}%")
-                
-                with col2:
                     avg_ltv = customer_analysis['LTV'].mean()
-                    st.metric("LTV Moyen", f"{avg_ltv:.2f} €")
-                
-                with col3:
-                    avg_orders = customer_analysis['Num_Orders'].mean()
-                    st.metric("Commandes / Client", f"{avg_orders:.1f}")
-                
-                with col4:
-                    churn_customers = customer_analysis['Churn_Risk'].sum()
-                    st.metric("Clients à Risque", churn_customers, delta=None, delta_color="inverse")
+                    churn_count = customer_analysis['Churn_Risk'].sum()
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("### 📊 Taux Clients Récurrents (preview)")
+                        st.markdown(f"""
+                        <div style='filter: blur(8px); pointer-events: none; user-select: none;'>
+                            <h1 style='text-align: center; font-size: 4rem; color: #28a745;'>{repeat_rate:.1f}%</h1>
+                            <p style='text-align: center;'>de vos clients reviennent</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown("### 💰 LTV Moyen (preview)")
+                        st.markdown(f"""
+                        <div style='filter: blur(8px); pointer-events: none; user-select: none;'>
+                            <h1 style='text-align: center; font-size: 4rem; color: #F56400;'>{avg_ltv:.0f}€</h1>
+                            <p style='text-align: center;'>Lifetime Value moyenne</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+                    st.markdown("### 🏆 Top Clients VIP (preview)")
+                    st.markdown("""
+                    <div style='filter: blur(5px); pointer-events: none; user-select: none;'>
+                        <table style='width: 100%; border-collapse: collapse;'>
+                            <tr style='background: #f0f2f6;'>
+                                <th style='padding: 10px; text-align: left;'>Client</th>
+                                <th style='padding: 10px; text-align: right;'>CA Total</th>
+                                <th style='padding: 10px; text-align: right;'>Achats</th>
+                            </tr>
+                            <tr>
+                                <td style='padding: 10px;'>Client #1</td>
+                                <td style='padding: 10px; text-align: right;'>250€</td>
+                                <td style='padding: 10px; text-align: right;'>8</td>
+                            </tr>
+                            <tr style='background: #f0f2f6;'>
+                                <td style='padding: 10px;'>Client #2</td>
+                                <td style='padding: 10px; text-align: right;'>195€</td>
+                                <td style='padding: 10px; text-align: right;'>6</td>
+                            </tr>
+                            <tr>
+                                <td style='padding: 10px;'>Client #3</td>
+                                <td style='padding: 10px; text-align: right;'>180€</td>
+                                <td style='padding: 10px; text-align: right;'>5</td>
+                            </tr>
+                        </table>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if churn_count > 0:
+                        st.markdown("---")
+                        st.markdown("### ⚠️ Clients à Risque (preview)")
+                        st.markdown(f"""
+                        <div style='filter: blur(5px); pointer-events: none; user-select: none;'>
+                            <div class="warning-box">
+                                <strong>{churn_count} clients</strong> n'ont pas commandé depuis 90+ jours
+                                <br><br>
+                                Actions recommandées :
+                                <ul>
+                                    <li>Email de réactivation avec -15%</li>
+                                    <li>Offre personnalisée</li>
+                                    <li>Sondage feedback</li>
+                                </ul>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 
                 st.markdown("---")
+                show_insights_upgrade_cta()
+            
+            else:
+                # MODE PREMIUM : TOUT DÉBLOQUÉ
+                st.success("💎 **Insights Premium activé**")
                 
-                # Distribution des clients
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("### 👥 Nouveaux vs Récurrents")
+                if customer_analysis is not None:
                     
-                    customer_types = pd.DataFrame({
-                        'Type': ['Nouveaux (1 achat)', 'Récurrents (2+ achats)'],
-                        'Count': [
-                            (customer_analysis['Num_Orders'] == 1).sum(),
-                            (customer_analysis['Num_Orders'] > 1).sum()
-                        ]
-                    })
+                    # KPIs
+                    col1, col2, col3, col4 = st.columns(4)
                     
-                    fig = px.pie(
-                        customer_types,
-                        values='Count',
-                        names='Type',
-                        color_discrete_sequence=['#ffc107', '#28a745']
-                    )
-                    fig.update_layout(height=400)
-                    st.plotly_chart(fig, width='stretch')
-                
-                with col2:
-                    st.markdown("### 📊 Distribution du Nombre d'Achats")
+                    with col1:
+                        repeat_customers = (customer_analysis['Num_Orders'] > 1).sum()
+                        repeat_rate = (repeat_customers / len(customer_analysis) * 100) if len(customer_analysis) > 0 else 0
+                        st.metric("Taux Clients Récurrents", f"{repeat_rate:.1f}%")
                     
-                    order_dist = customer_analysis['Num_Orders'].value_counts().sort_index().head(10)
+                    with col2:
+                        avg_ltv = customer_analysis['LTV'].mean()
+                        st.metric("LTV Moyen", f"{avg_ltv:.2f} €")
                     
-                    fig = px.bar(
-                        x=order_dist.index,
-                        y=order_dist.values,
-                        labels={'x': 'Nombre d\'achats', 'y': 'Nombre de clients'},
-                        text=order_dist.values,
-                        color=order_dist.values,
-                        color_continuous_scale='Blues'
-                    )
-                    fig.update_traces(textposition='outside')
-                    fig.update_layout(height=400, showlegend=False)
-                    st.plotly_chart(fig, width='stretch')
-                
-                # Lifetime Value
-                st.markdown("---")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("### 💎 Distribution de la LTV")
+                    with col3:
+                        avg_orders = customer_analysis['Num_Orders'].mean()
+                        st.metric("Commandes / Client", f"{avg_orders:.1f}")
                     
-                    fig = px.histogram(
-                        customer_analysis,
-                        x='LTV',
-                        nbins=30,
-                        title="Répartition des clients par LTV",
-                        color_discrete_sequence=['#F56400']
-                    )
-                    fig.update_layout(
-                        xaxis_title="Lifetime Value (€)",
-                        yaxis_title="Nombre de clients",
-                        height=400
-                    )
-                    st.plotly_chart(fig, width='stretch')
-                
-                with col2:
-                    st.markdown("### ⏱️ Délai Entre Deux Achats")
+                    with col4:
+                        churn_customers = customer_analysis['Churn_Risk'].sum()
+                        st.metric("Clients à Risque", churn_customers, delta=None, delta_color="inverse")
                     
-                    repeat_customers_df = customer_analysis[customer_analysis['Num_Orders'] > 1]
+                    st.markdown("---")
                     
-                    if len(repeat_customers_df) > 0:
+                    # Distribution des clients
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("### 👥 Nouveaux vs Récurrents")
+                        
+                        customer_types = pd.DataFrame({
+                            'Type': ['Nouveaux (1 achat)', 'Récurrents (2+ achats)'],
+                            'Count': [
+                                (customer_analysis['Num_Orders'] == 1).sum(),
+                                (customer_analysis['Num_Orders'] > 1).sum()
+                            ]
+                        })
+                        
+                        fig = px.pie(
+                            customer_types,
+                            values='Count',
+                            names='Type',
+                            color_discrete_sequence=['#ffc107', '#28a745']
+                        )
+                        fig.update_layout(height=400)
+                        st.plotly_chart(fig, width='stretch')
+                    
+                    with col2:
+                        st.markdown("### 📊 Distribution du Nombre d'Achats")
+                        
+                        order_dist = customer_analysis['Num_Orders'].value_counts().sort_index().head(10)
+                        
+                        fig = px.bar(
+                            x=order_dist.index,
+                            y=order_dist.values,
+                            labels={'x': 'Nombre d\'achats', 'y': 'Nombre de clients'},
+                            text=order_dist.values,
+                            color=order_dist.values,
+                            color_continuous_scale='Blues'
+                        )
+                        fig.update_traces(textposition='outside')
+                        fig.update_layout(height=400, showlegend=False)
+                        st.plotly_chart(fig, width='stretch')
+                    
+                    # Lifetime Value
+                    st.markdown("---")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("### 💎 Distribution de la LTV")
+                        
                         fig = px.histogram(
-                            repeat_customers_df,
-                            x='Days_Between_Orders',
-                            nbins=20,
-                            title="Temps moyen entre 2 commandes",
-                            color_discrete_sequence=['#007bff']
+                            customer_analysis,
+                            x='LTV',
+                            nbins=30,
+                            title="Répartition des clients par LTV",
+                            color_discrete_sequence=['#F56400']
                         )
                         fig.update_layout(
-                            xaxis_title="Jours entre achats",
+                            xaxis_title="Lifetime Value (€)",
                             yaxis_title="Nombre de clients",
                             height=400
                         )
                         st.plotly_chart(fig, width='stretch')
+                    
+                    with col2:
+                        st.markdown("### ⏱️ Délai Entre Deux Achats")
                         
-                        avg_days_between = repeat_customers_df['Days_Between_Orders'].mean()
+                        repeat_customers_df = customer_analysis[customer_analysis['Num_Orders'] > 1]
+                        
+                        if len(repeat_customers_df) > 0:
+                            fig = px.histogram(
+                                repeat_customers_df,
+                                x='Days_Between_Orders',
+                                nbins=20,
+                                title="Temps moyen entre 2 commandes",
+                                color_discrete_sequence=['#007bff']
+                            )
+                            fig.update_layout(
+                                xaxis_title="Jours entre achats",
+                                yaxis_title="Nombre de clients",
+                                height=400
+                            )
+                            st.plotly_chart(fig, width='stretch')
+                            
+                            avg_days_between = repeat_customers_df['Days_Between_Orders'].mean()
+                            
+                            st.markdown(f"""
+                            <div class="insight-box">
+                            💡 <strong>Insight :</strong> Vos clients récurrents rachètent en moyenne tous les <strong>{avg_days_between:.0f} jours</strong>.
+                            <br>→ Programmez vos relances marketing à ce rythme.
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.info("Pas encore assez de clients récurrents pour cette analyse")
+                    
+                    # Top clients VIP
+                    st.markdown("---")
+                    st.markdown("### 🏆 Top 10 Clients VIP (par CA)")
+                    
+                    top_vip = customer_analysis.nlargest(10, 'LTV')[['Buyer', 'Num_Orders', 'LTV']]
+                    
+                    # Anonymiser les noms
+                    top_vip['Buyer_Display'] = ['Client #' + str(i+1) for i in range(len(top_vip))]
+                    
+                    fig = px.bar(
+                        top_vip,
+                        x='LTV',
+                        y='Buyer_Display',
+                        orientation='h',
+                        text='LTV',
+                        color='Num_Orders',
+                        color_continuous_scale='Greens',
+                        hover_data={'Num_Orders': True}
+                    )
+                    fig.update_traces(texttemplate='%{text:.2f}€', textposition='outside')
+                    fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
+                    st.plotly_chart(fig, width='stretch')
+                    
+                    # Clients à risque
+                    churn_risk_df = customer_analysis[customer_analysis['Churn_Risk'] == True].nlargest(10, 'LTV')
+                    
+                    if len(churn_risk_df) > 0:
+                        st.markdown("---")
+                        st.markdown("### ⚠️ Clients à Risque de Churn (pas d'achat depuis 90+ jours)")
                         
                         st.markdown(f"""
-                        <div class="insight-box">
-                        💡 <strong>Insight :</strong> Vos clients récurrents rachètent en moyenne tous les <strong>{avg_days_between:.0f} jours</strong>.
-                        <br>→ Programmez vos relances marketing à ce rythme.
+                        <div class="warning-box">
+                        <strong>{len(churn_risk_df)} clients</strong> n'ont pas commandé depuis plus de 90 jours.
+                        <br><br>
+                        <strong>Action recommandée :</strong>
+                        <ul>
+                        <li>Envoyez un email de réactivation avec code promo -15%</li>
+                        <li>Proposez une offre personnalisée basée sur leurs achats précédents</li>
+                        <li>Demandez un feedback pour comprendre pourquoi ils sont partis</li>
+                        </ul>
                         </div>
                         """, unsafe_allow_html=True)
-                    else:
-                        st.info("Pas encore assez de clients récurrents pour cette analyse")
-                
-                # Top clients VIP
-                st.markdown("---")
-                st.markdown("### 🏆 Top 10 Clients VIP (par CA)")
-                
-                top_vip = customer_analysis.nlargest(10, 'LTV')[['Buyer', 'Num_Orders', 'LTV']]
-                
-                # Anonymiser les noms
-                top_vip['Buyer_Display'] = ['Client #' + str(i+1) for i in range(len(top_vip))]
-                
-                fig = px.bar(
-                    top_vip,
-                    x='LTV',
-                    y='Buyer_Display',
-                    orientation='h',
-                    text='LTV',
-                    color='Num_Orders',
-                    color_continuous_scale='Greens',
-                    hover_data={'Num_Orders': True}
-                )
-                fig.update_traces(texttemplate='%{text:.2f}€', textposition='outside')
-                fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(fig, width='stretch')
-                
-                # Clients à risque
-                churn_risk_df = customer_analysis[customer_analysis['Churn_Risk'] == True].nlargest(10, 'LTV')
-                
-                if len(churn_risk_df) > 0:
-                    st.markdown("---")
-                    st.markdown("### ⚠️ Clients à Risque de Churn (pas d'achat depuis 90+ jours)")
-                    
-                    st.markdown(f"""
-                    <div class="warning-box">
-                    <strong>{len(churn_risk_df)} clients</strong> n'ont pas commandé depuis plus de 90 jours.
-                    <br><br>
-                    <strong>Action recommandée :</strong>
-                    <ul>
-                    <li>Envoyez un email de réactivation avec code promo -15%</li>
-                    <li>Proposez une offre personnalisée basée sur leurs achats précédents</li>
-                    <li>Demandez un feedback pour comprendre pourquoi ils sont partis</li>
-                    </ul>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    churn_risk_df['Buyer_Display'] = ['Client #' + str(i+1) for i in range(len(churn_risk_df))]
-                    
-                    display_churn = churn_risk_df[['Buyer_Display', 'Num_Orders', 'LTV', 'Days_Since_Last']].copy()
-                    display_churn.columns = ['Client', 'Achats', 'LTV (€)', 'Jours depuis dernier achat']
-                    
-                    st.dataframe(display_churn, width='stretch')
+                        
+                        churn_risk_df['Buyer_Display'] = ['Client #' + str(i+1) for i in range(len(churn_risk_df))]
+                        
+                        display_churn = churn_risk_df[['Buyer_Display', 'Num_Orders', 'LTV', 'Days_Since_Last']].copy()
+                        display_churn.columns = ['Client', 'Achats', 'LTV (€)', 'Jours depuis dernier achat']
+                        
+                        st.dataframe(display_churn, width='stretch')
         
         with tab5:
-            st.markdown("## 📧 Recommandations Marketing Personnalisées")
+            st.markdown("## 🔧 Recommandations Marketing Personnalisées")
+            
+            # Vérifier abonnement Insights
+            has_insights = has_insights_subscription(customer_id)
             
             recommendations = []
             
@@ -1392,85 +1522,146 @@ else:
                     ]
                 })
             
-            # Affichage des recommandations
-            st.markdown("### 🎯 Vos Actions Prioritaires")
+            # MODE GRATUIT vs PAYANT
+            if not has_insights:
+                st.info("""
+                🎁 **1 recommandation gratuite débloquée**  
+                💎 **4+ recommandations premium disponibles avec Insights 9€/mois**
+                """)
+                
+                # Afficher la MEILLEURE recommandation (priorité HAUTE)
+                best_rec = None
+                for rec in recommendations:
+                    if rec['priority'] == '🔴 HAUTE':
+                        best_rec = rec
+                        break
+                
+                if best_rec is None and recommendations:
+                    best_rec = recommendations[0]
+                
+                if best_rec:
+                    with st.expander(f"✅ {best_rec['priority']} - {best_rec['title']}", expanded=True):
+                        st.markdown(f"**{best_rec['detail']}**")
+                        
+                        st.markdown("---")
+                        st.markdown("**📋 Actions recommandées :**")
+                        for action in best_rec['actions']:
+                            st.markdown(f"- {action}")
+                
+                # Afficher les autres LOCKÉES
+                st.markdown("---")
+                st.markdown("### 🔒 Recommandations Premium")
+                
+                locked_recs = [r for r in recommendations if r != best_rec][:4]
+                
+                for rec in locked_recs:
+                    show_locked_recommendation(rec['title'], rec['priority'])
+                
+                # CTA UPGRADE
+                st.markdown("---")
+                show_insights_upgrade_cta()
             
-            for i, rec in enumerate(recommendations, 1):
-                with st.expander(f"{rec['priority']} - {rec['title']}", expanded=(i <= 2)):
-                    st.markdown(f"**{rec['detail']}**")
-                    st.markdown("**📋 Actions à prendre :**")
-                    for action in rec['actions']:
-                        st.markdown(f"- {action}")
-            
-            # Stratégie globale
-            st.markdown("---")
-            st.markdown("### 🚀 Stratégie Marketing Globale Recommandée")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("""
-                <div class="success-box">
-                <strong>🎯 Court Terme (30 jours)</strong>
-                <ol>
-                <li>Répondre à tous les avis négatifs</li>
-                <li>Lancer campagne de réactivation clients inactifs</li>
-                <li>Optimiser listings pour marché principal</li>
-                <li>Créer code promo fidélité</li>
-                </ol>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown("""
-                <div class="insight-box">
-                <strong>🚀 Long Terme (3-6 mois)</strong>
-                <ol>
-                <li>Développer programme de fidélité structuré</li>
-                <li>Expansion géographique ciblée</li>
-                <li>Amélioration continue qualité produits</li>
-                <li>Construction d'une communauté de clients fidèles</li>
-                </ol>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Checklist
-            st.markdown("---")
-            st.markdown("### ✅ Checklist d'Actions Immédiates")
-            
-            checklist = [
-                "J'ai répondu à tous mes avis négatifs",
-                "J'ai créé un code promo pour mes clients récurrents",
-                "J'ai envoyé un email de réactivation aux clients inactifs",
-                "J'ai optimisé mes listings pour mon marché principal",
-                "J'ai analysé les causes de mes avis négatifs",
-                "J'ai mis en avant mes points forts dans mes descriptions",
-                "J'ai programmé mes prochaines publications aux bons jours",
-                "J'ai créé une newsletter pour rester en contact",
-                "J'ai mis en place un suivi des clients VIP",
-                "J'ai un plan d'action pour réduire le churn"
-            ]
-            
-            for item in checklist:
-                st.checkbox(item)
+            else:
+                # MODE PAYANT : Toutes les recommandations
+                st.success("💎 **Insights Premium activé** - Toutes les recommandations débloquées")
+                
+                st.markdown("### 🎯 Vos Actions Prioritaires")
+                
+                for i, rec in enumerate(recommendations, 1):
+                    with st.expander(f"{rec['priority']} - {rec['title']}", expanded=(i==1)):
+                        st.markdown(f"**{rec['detail']}**")
+                        
+                        st.markdown("---")
+                        st.markdown("**📋 Actions à prendre :**")
+                        for action in rec['actions']:
+                            st.markdown(f"- {action}")
+                
+                # Stratégie globale
+                st.markdown("---")
+                st.markdown("### 🚀 Stratégie Marketing Globale Recommandée")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("""
+                    <div class="success-box">
+                    <strong>🎯 Court Terme (30 jours)</strong>
+                    <ol>
+                    <li>Répondre à tous les avis négatifs</li>
+                    <li>Lancer campagne de réactivation clients inactifs</li>
+                    <li>Optimiser listings pour marché principal</li>
+                    <li>Créer code promo fidélité</li>
+                    </ol>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown("""
+                    <div class="insight-box">
+                    <strong>🚀 Long Terme (3-6 mois)</strong>
+                    <ol>
+                    <li>Développer programme de fidélité structuré</li>
+                    <li>Expansion géographique ciblée</li>
+                    <li>Amélioration continue qualité produits</li>
+                    <li>Construction d'une communauté de clients fidèles</li>
+                    </ol>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Checklist
+                st.markdown("---")
+                st.markdown("### ✅ Checklist d'Actions Immédiates")
+                
+                checklist = [
+                    "J'ai répondu à tous mes avis négatifs",
+                    "J'ai créé un code promo pour mes clients récurrents",
+                    "J'ai envoyé un email de réactivation aux clients inactifs",
+                    "J'ai optimisé mes listings pour mon marché principal",
+                    "J'ai analysé les causes de mes avis négatifs",
+                    "J'ai mis en avant mes points forts dans mes descriptions",
+                    "J'ai programmé mes prochaines publications aux bons jours",
+                    "J'ai créé une newsletter pour rester en contact",
+                    "J'ai mis en place un suivi des clients VIP",
+                    "J'ai un plan d'action pour réduire le churn"
+                ]
+                
+                for item in checklist:
+                    st.checkbox(item)
         
-        # Export PDF
+        # ========== EXPORT PDF (PREMIUM ONLY) ==========
+        # Bouton d'export PDF
         st.markdown("---")
-        st.markdown("## 📄 Exporter le Rapport")
-        
-        if st.button("📥 Générer le Rapport PDF", type="primary", width='stretch'):
-            with st.spinner("Génération du rapport en cours..."):
-                pdf_buffer = generate_customer_intelligence_pdf(orders_df, reviews_df, customer_analysis)
-                
-                st.download_button(
-                    label="⬇️ Télécharger le Rapport PDF",
-                    data=pdf_buffer,
-                    file_name=f"rapport_customer_intelligence_{datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    width='stretch'
-                )
-                
-                st.success("✅ Rapport généré avec succès !")
+        st.markdown("## 📄 Exporter le rapport")
+
+        # Vérifier abonnement Insights
+        has_insights = has_insights_subscription(customer_id)
+
+        if not has_insights:
+            # MODE GRATUIT : Bloquer l'export
+            st.warning("🔒 **Export PDF réservé aux abonnés Insights Premium**")
+            
+            # Bouton blurré
+            st.markdown("""
+            <div style='filter: blur(3px); pointer-events: none;'>
+            """, unsafe_allow_html=True)
+            st.button("📥 Générer le rapport PDF", type="primary", use_container_width=True, disabled=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        else:
+            # MODE PAYANT : Export disponible
+            if st.button("📥 Générer le rapport PDF", type="primary", use_container_width=True):
+                with st.spinner("Génération du rapport en cours..."):
+                    pdf_buffer = generate_pdf_report(kpis, df, product_analysis)
+                    
+                    st.download_button(
+                        label="⬇️ Télécharger le rapport PDF",
+                        data=pdf_buffer,
+                        file_name=f"rapport_etsy_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                    
+                    st.success("✅ Rapport généré avec succès !")
 
 # Footer
 st.markdown("---")

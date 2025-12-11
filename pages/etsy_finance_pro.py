@@ -17,7 +17,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # NOUVEAUX IMPORTS
-from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message
+from auth.access_manager import check_access, has_access_to_dashboard, show_upgrade_message, has_insights_subscription, show_insights_upgrade_cta, show_locked_recommendation, check_usage_limit, increment_usage, show_usage_limit_message, should_increment_usage, increment_usage_with_timestamp
 from data_collection.collector import show_data_opt_in
 
 # Configuration de la page
@@ -34,11 +34,11 @@ user_info = check_access()
 # Récupérer le customer_id (UUID depuis Supabase)
 customer_id = user_info.get('id')
 
-# Vérifier l'accès à ce dashboard spécifique
-if not has_access_to_dashboard(customer_id, 'finance_pro'):
-    show_upgrade_message('finance_pro', customer_id)
-    st.stop()
-# ====================================================
+# # Vérifier l'accès à ce dashboard spécifique
+# if not has_access_to_dashboard(customer_id, 'finance_pro'):
+#     show_upgrade_message('finance_pro', customer_id)
+#     st.stop()
+# # ====================================================
 
 # ========== AFFICHAGE POP-UP CONSENTEMENT ==========
 show_data_opt_in(user_info['email'])
@@ -251,6 +251,215 @@ def load_data(uploaded_file):
         st.error(f"❌ Erreur lors du chargement des données : {e}")
         st.info("💡 Vérifiez que votre fichier est bien au format CSV et qu'il contient les colonnes nécessaires.")
         return None
+    
+
+# ========== FONCTIONS HELPERS POUR INSIGHTS 9€ ==========
+
+def calculate_health_score(kpis, product_analysis):
+    """Calcule un score global de santé financière (0-100)"""
+    score = 0
+    details = {}
+    
+    # 1. Score Marge (0-30 points)
+    marge_pct = kpis.get('taux_marge', 0)
+    if marge_pct >= 40:
+        marge_score = 30
+    elif marge_pct >= 35:
+        marge_score = 25
+    elif marge_pct >= 30:
+        marge_score = 20
+    elif marge_pct >= 25:
+        marge_score = 15
+    else:
+        marge_score = int(marge_pct / 2.5)
+    
+    details['Marge'] = {
+        'score': marge_score,
+        'max': 30,
+        'value': f"{marge_pct:.1f}%",
+        'target': "35%+"
+    }
+    score += marge_score
+    
+    # 2. Score Panier moyen (0-25 points)
+    panier = kpis.get('panier_moyen', 0)
+    if panier >= 40:
+        panier_score = 25
+    elif panier >= 35:
+        panier_score = 20
+    elif panier >= 30:
+        panier_score = 15
+    elif panier >= 25:
+        panier_score = 10
+    else:
+        panier_score = int(panier / 2.5)
+    
+    details['Panier moyen'] = {
+        'score': panier_score,
+        'max': 25,
+        'value': f"{panier:.2f}€",
+        'target': "35€+"
+    }
+    score += panier_score
+    
+    # 3. Score Diversification (0-25 points)
+    if product_analysis is not None and len(product_analysis) > 0:
+        product_analysis_sorted = product_analysis.sort_values('CA', ascending=False)
+        product_analysis_sorted['CA_cumul_pct'] = (
+            product_analysis_sorted['CA'].cumsum() / product_analysis_sorted['CA'].sum() * 100
+        )
+        products_for_80 = len(product_analysis_sorted[product_analysis_sorted['CA_cumul_pct'] <= 80])
+        total_products = len(product_analysis_sorted)
+        
+        concentration_ratio = products_for_80 / total_products if total_products > 0 else 0
+        
+        if concentration_ratio >= 0.5:
+            diversification_score = 5
+        elif concentration_ratio >= 0.3:
+            diversification_score = 10
+        elif concentration_ratio >= 0.2:
+            diversification_score = 15
+        elif concentration_ratio >= 0.1:
+            diversification_score = 20
+        else:
+            diversification_score = 25
+        
+        details['Diversification'] = {
+            'score': diversification_score,
+            'max': 25,
+            'value': f"{products_for_80}/{total_products} produits = 80% CA",
+            'target': "< 20%"
+        }
+        score += diversification_score
+    else:
+        details['Diversification'] = {
+            'score': 0,
+            'max': 25,
+            'value': "N/A",
+            'target': "< 20%"
+        }
+    
+    # 4. Score Rotation/Activité (0-20 points)
+    nb_ventes = kpis.get('nb_ventes', 0)
+    if nb_ventes >= 100:
+        activity_score = 20
+    elif nb_ventes >= 50:
+        activity_score = 15
+    elif nb_ventes >= 25:
+        activity_score = 10
+    elif nb_ventes >= 10:
+        activity_score = 5
+    else:
+        activity_score = 2
+    
+    details['Activité'] = {
+        'score': activity_score,
+        'max': 20,
+        'value': f"{nb_ventes} ventes",
+        'target': "50+ ventes"
+    }
+    score += activity_score
+    
+    return score, details
+
+
+def calculate_month_comparison(df):
+    """Compare le mois actuel avec le mois précédent"""
+    if 'Date' not in df.columns or len(df) == 0:
+        return None
+    
+    now = datetime.now()
+    current_month_start = datetime(now.year, now.month, 1)
+    
+    if now.month == 1:
+        previous_month_start = datetime(now.year - 1, 12, 1)
+    else:
+        previous_month_start = datetime(now.year, now.month - 1, 1)
+    
+    # Filtrer les données
+    df_current = df[df['Date'] >= current_month_start]
+    df_previous = df[(df['Date'] >= previous_month_start) & (df['Date'] < current_month_start)]
+    
+    if len(df_previous) == 0:
+        return None
+    
+    comparison = {
+        'current_ca': df_current['Price'].sum() if len(df_current) > 0 else 0,
+        'previous_ca': df_previous['Price'].sum(),
+        'current_ventes': len(df_current),
+        'previous_ventes': len(df_previous),
+        'current_panier': df_current['Price'].sum() / len(df_current) if len(df_current) > 0 else 0,
+        'previous_panier': df_previous['Price'].sum() / len(df_previous)
+    }
+    
+    # Calculer les variations
+    comparison['ca_variation'] = ((comparison['current_ca'] - comparison['previous_ca']) / 
+                                  comparison['previous_ca'] * 100) if comparison['previous_ca'] > 0 else 0
+    comparison['ventes_variation'] = ((comparison['current_ventes'] - comparison['previous_ventes']) / 
+                                      comparison['previous_ventes'] * 100) if comparison['previous_ventes'] > 0 else 0
+    comparison['panier_variation'] = ((comparison['current_panier'] - comparison['previous_panier']) / 
+                                      comparison['previous_panier'] * 100) if comparison['previous_panier'] > 0 else 0
+    
+    return comparison
+
+
+def generate_alerts(kpis, comparison, product_analysis):
+    """Génère des alertes opportunités basées sur les données (max 3)"""
+    alerts = []
+    
+    # Alerte 1 : Baisse de CA
+    if comparison and comparison.get('ca_variation', 0) < -10:
+        alerts.append({
+            'type': 'warning',
+            'icon': '⚠️',
+            'title': 'Baisse significative du CA',
+            'message': f"Votre CA a baissé de {abs(comparison['ca_variation']):.1f}% ce mois",
+            'action': "Analysez les causes : saisonnalité, concurrence, ou problème de stock ?"
+        })
+    
+    # Alerte 2 : Hausse de CA
+    if comparison and comparison.get('ca_variation', 0) > 15:
+        alerts.append({
+            'type': 'success',
+            'icon': '📈',
+            'title': 'Excellente performance',
+            'message': f"Votre CA a augmenté de {comparison['ca_variation']:.1f}% ce mois !",
+            'action': "Identifiez ce qui fonctionne et répliquez la stratégie"
+        })
+    
+    # Alerte 3 : Produit qui cartonne
+    if product_analysis is not None and len(product_analysis) > 0:
+        top_product = product_analysis.iloc[0]
+        if top_product['Ventes'] >= 10:
+            alerts.append({
+                'type': 'success',
+                'icon': '⚡',
+                'title': 'Best-seller détecté',
+                'message': f"'{top_product['Product'][:40]}...' performe excellemment ({int(top_product['Ventes'])} ventes)",
+                'action': "Créez des variantes, augmentez le stock, boostez avec Etsy Ads"
+            })
+    
+    # Alerte 4 : Marge faible
+    if kpis.get('taux_marge', 0) < 30:
+        alerts.append({
+            'type': 'warning',
+            'icon': '📉',
+            'title': 'Marge sous le seuil critique',
+            'message': f"Votre marge de {kpis['taux_marge']:.1f}% est inférieure à 30%",
+            'action': "Réduisez vos coûts ou augmentez vos prix de 5-10%"
+        })
+    
+    # Alerte 5 : Panier moyen faible
+    if kpis.get('panier_moyen', 0) < 25:
+        alerts.append({
+            'type': 'info',
+            'icon': '💡',
+            'title': 'Opportunité : Augmenter le panier moyen',
+            'message': f"Votre panier moyen ({kpis['panier_moyen']:.2f}€) peut être amélioré",
+            'action': "Créez des bundles ou proposez la livraison gratuite à partir de 40€"
+        })
+    
+    return alerts[:3]  # Limiter à 3 alertes max
 
 # Fonction pour calculer les KPIs - VERSION AMÉLIORÉE avec frais Etsy détaillés
 def calculate_kpis(df, etsy_fees_config=None):
@@ -733,10 +942,27 @@ if uploaded_file is None:
     )
 
 else:
+    # Après check_access()
+    usage_info = check_usage_limit(customer_id)
+
+    if not usage_info['allowed']:
+        show_usage_limit_message(usage_info)
+        st.stop()
+
     # Chargement des données
     df = load_data(uploaded_file)
     
     if df is not None:
+        # Vérifier si on doit compter cette analyse
+        if should_increment_usage(customer_id):
+            increment_usage_with_timestamp(customer_id)
+            
+            # Rafraîchir usage_info pour afficher compteur à jour
+            usage_info = check_usage_limit(customer_id)
+            
+            # Afficher message discret
+            if not has_insights_subscription(customer_id):
+                st.success(f"✅ Analyse comptée : {usage_info['usage_count']}/{usage_info['limit']} cette semaine")
 
         # Appliquer la méthode de coûts choisie
         if cost_method == "Coût moyen par produit":
@@ -787,10 +1013,21 @@ else:
         # Calcul des KPIs avec configuration des frais Etsy
         kpis = calculate_kpis(df, etsy_fees_config)
 
+        # Analyse des produits
+        product_analysis = analyze_products(df)
+
+        # ===== NOUVELLES ANALYSES INSIGHTS 9€ =====
+        # Calcul du score santé
+        health_score, health_details = calculate_health_score(kpis, product_analysis)
+        
+        # Comparaison mensuelle
+        month_comparison = calculate_month_comparison(df)
+        
+        # Génération des alertes
+        alerts = generate_alerts(kpis, month_comparison, product_analysis)
+        # =========================================
+
         # ========== NOUVEAU : COLLECTE DE DONNÉES ==========
-        # Collecter si l'utilisateur a donné son consentement
-        # if st.session_state.get('data_consent', False):  # ✅ Changé : consent_asked → data_consent
-        # Récupérer TOUS les fichiers uploadés
         all_files = {}
         
         # Fichier principal (orderitems)
@@ -807,15 +1044,16 @@ else:
         
         # Collecter
         from data_collection.collector import collect_raw_data
-        if all_files:  # Seulement si on a des fichiers
+        if all_files:
             collect_result = collect_raw_data(all_files, user_info['email'], 'finance_pro')
         # ===================================================
         
         # Onglets principaux
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📊 Vue d'ensemble",
             "🏆 Analyse Produits",
             "📈 Évolution",
+            "💎 Insights Premium",
             "🤖 Recommandations IA"
         ])
         
@@ -905,7 +1143,7 @@ else:
                 fig.update_layout(height=400)
                 st.plotly_chart(fig, width='stretch')
             
-            # Détail des frais Etsy - NOUVEAU
+            # Détail des frais Etsy
             if kpis.get('frais_etsy_detail'):
                 st.markdown("---")
                 st.markdown("### 💳 Détail des frais Etsy")
@@ -970,7 +1208,7 @@ else:
         with tab2:
             st.markdown("## 🏆 Analyse des Produits")
             
-            product_analysis = analyze_products(df)
+            # product_analysis = analyze_products(df)
             
             if product_analysis is not None and len(product_analysis) > 0:
                 col1, col2 = st.columns(2)
@@ -1122,9 +1360,190 @@ else:
                         st.info("ℹ️ Pas assez de données pour déterminer le meilleur jour de vente.")
             else:
                 st.warning("Les données de date ne sont pas disponibles pour l'analyse temporelle.")
-        
+
         with tab4:
-            st.markdown("## 🤖 Recommandations personnalisées")
+            st.markdown("## 💎 Insights Premium (9€/mois)")
+            
+            # Vérifier abonnement Insights
+            has_insights = has_insights_subscription(customer_id)
+            
+            if not has_insights:
+                # MODE GRATUIT : TEASER
+                st.info("""
+                🎁 **Fonctionnalités Insights disponibles avec l'abonnement 9€/mois :**
+                - 📊 Score santé financière global
+                - 📈 Comparaison mois actuel vs précédent
+                - 🔔 Alertes opportunités hebdomadaires
+                - 🎯 Benchmarks secteur détaillés
+                - 🤖 5 recommandations IA complètes
+                """)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("### 📊 Score Santé (preview)")
+                    st.markdown("""
+                    <div style='filter: blur(8px); pointer-events: none;'>
+                        <h1 style='text-align: center; font-size: 4rem; color: #28a745;'>72/100</h1>
+                        <p style='text-align: center;'>Score Bon</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown("### 📈 Comparaison M-1 (preview)")
+                    st.markdown("""
+                    <div style='filter: blur(8px); pointer-events: none;'>
+                        <p>CA : +12.5%</p>
+                        <p>Ventes : +8 ventes</p>
+                        <p>Panier moyen : +2.30€</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("---")
+                show_insights_upgrade_cta()
+            
+            else:
+                # MODE PAYANT : TOUTES LES FONCTIONNALITÉS
+                st.success("💎 **Insights Premium activé**")
+                
+                # 1. SCORE SANTÉ FINANCIÈRE
+                st.markdown("### 📊 Score Santé Financière")
+                
+                col1, col2 = st.columns([1, 2])
+                
+                with col1:
+                    # Afficher le score avec couleur
+                    if health_score >= 80:
+                        score_color = "#28a745"
+                        score_label = "Excellent"
+                    elif health_score >= 60:
+                        score_color = "#ffc107"
+                        score_label = "Bon"
+                    elif health_score >= 40:
+                        score_color = "#fd7e14"
+                        score_label = "Moyen"
+                    else:
+                        score_color = "#dc3545"
+                        score_label = "Faible"
+                    
+                    st.markdown(f"""
+                    <div style='text-align: center; padding: 2rem; background: linear-gradient(135deg, {score_color}22, {score_color}11); 
+                                border-radius: 15px; border: 3px solid {score_color};'>
+                        <h1 style='font-size: 4rem; margin: 0; color: {score_color};'>{health_score}/100</h1>
+                        <p style='font-size: 1.5rem; margin: 0; color: {score_color};'>{score_label}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown("**Détail du score :**")
+                    for metric_name, metric_data in health_details.items():
+                        progress_pct = (metric_data['score'] / metric_data['max']) * 100
+                        st.markdown(f"**{metric_name}** : {metric_data['score']}/{metric_data['max']} points")
+                        st.progress(progress_pct / 100)
+                        st.caption(f"Valeur : {metric_data['value']} | Objectif : {metric_data['target']}")
+                        st.markdown("---")
+                
+                # 2. COMPARAISON MOIS ACTUEL VS PRÉCÉDENT
+                if month_comparison:
+                    st.markdown("---")
+                    st.markdown("### 📈 Comparaison Mois Actuel vs Précédent")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        ca_delta_color = "normal" if month_comparison['ca_variation'] >= 0 else "inverse"
+                        st.metric(
+                            "Chiffre d'affaires",
+                            f"{month_comparison['current_ca']:.2f} €",
+                            delta=f"{month_comparison['ca_variation']:+.1f}%",
+                            delta_color=ca_delta_color
+                        )
+                        st.caption(f"Mois précédent : {month_comparison['previous_ca']:.2f} €")
+                    
+                    with col2:
+                        ventes_delta_color = "normal" if month_comparison['ventes_variation'] >= 0 else "inverse"
+                        st.metric(
+                            "Nombre de ventes",
+                            f"{month_comparison['current_ventes']}",
+                            delta=f"{month_comparison['ventes_variation']:+.1f}%",
+                            delta_color=ventes_delta_color
+                        )
+                        st.caption(f"Mois précédent : {month_comparison['previous_ventes']}")
+                    
+                    with col3:
+                        panier_delta_color = "normal" if month_comparison['panier_variation'] >= 0 else "inverse"
+                        st.metric(
+                            "Panier moyen",
+                            f"{month_comparison['current_panier']:.2f} €",
+                            delta=f"{month_comparison['panier_variation']:+.1f}%",
+                            delta_color=panier_delta_color
+                        )
+                        st.caption(f"Mois précédent : {month_comparison['previous_panier']:.2f} €")
+                else:
+                    st.info("ℹ️ Pas assez de données pour comparer avec le mois précédent")
+                
+                # 3. ALERTES OPPORTUNITÉS
+                if alerts:
+                    st.markdown("---")
+                    st.markdown("### 🔔 Alertes & Opportunités")
+                    
+                    for alert in alerts:
+                        if alert['type'] == 'warning':
+                            alert_class = "warning-box"
+                        elif alert['type'] == 'success':
+                            alert_class = "success-box"
+                        else:
+                            alert_class = "metric-card"
+                        
+                        st.markdown(f"""
+                        <div class="{alert_class}">
+                            <h4>{alert['icon']} {alert['title']}</h4>
+                            <p>{alert['message']}</p>
+                            <p><strong>Action recommandée :</strong> {alert['action']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.markdown("")
+                
+                # 4. BENCHMARKS SECTEUR
+                st.markdown("---")
+                st.markdown("### 🎯 Benchmarks Secteur")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Votre marge", f"{kpis['taux_marge']:.1f}%")
+                    st.caption("Votre performance actuelle")
+                
+                with col2:
+                    benchmark_marge = 37
+                    delta_vs_benchmark = kpis['taux_marge'] - benchmark_marge
+                    delta_color = "normal" if delta_vs_benchmark >= 0 else "inverse"
+                    st.metric(
+                        "Moyenne secteur",
+                        f"{benchmark_marge}%",
+                        delta=f"{delta_vs_benchmark:+.1f} points",
+                        delta_color=delta_color
+                    )
+                    st.caption("Moyenne bijoux fantaisie")
+                
+                with col3:
+                    top_performers = 42
+                    st.metric("Top performers", f"{top_performers}%")
+                    st.caption("Top 10% du secteur")
+                
+                # Positionnement
+                if kpis['taux_marge'] >= top_performers:
+                    st.success("🏆 Excellent ! Vous faites partie du top 10% du secteur")
+                elif kpis['taux_marge'] >= benchmark_marge:
+                    st.info("✅ Bien ! Vous êtes au-dessus de la moyenne secteur")
+                else:
+                    st.warning(f"⚠️ Attention : {benchmark_marge - kpis['taux_marge']:.1f} points en dessous de la moyenne")
+        
+        with tab5:
+            st.markdown("## 🤖 Recommandations IA Personnalisées")
+            
+            # Vérifier abonnement Insights
+            has_insights = has_insights_subscription(customer_id)
             
             recommendations = []
             
@@ -1132,9 +1551,9 @@ else:
             if kpis['taux_marge'] < 30:
                 recommendations.append({
                     'priority': '🔴 HAUTE',
-                    'action': 'Augmenter vos marges',
+                    'title': 'Augmenter vos marges',
                     'detail': f"Votre taux de marge actuel ({kpis['taux_marge']:.1f}%) est en dessous du seuil de rentabilité. Objectif : atteindre 35-40%.",
-                    'suggestions': [
+                    'actions': [
                         "Négociez avec vos fournisseurs pour réduire les coûts matières de 10-15%",
                         "Augmentez vos prix de 5-10% sur les produits à forte demande",
                         "Optimisez vos coûts d'expédition (emballages groupés)"
@@ -1143,9 +1562,9 @@ else:
             else:
                 recommendations.append({
                     'priority': '🟢 INFO',
-                    'action': 'Maintenir vos marges',
+                    'title': 'Maintenir vos marges',
                     'detail': f"Excellent ! Votre taux de marge ({kpis['taux_marge']:.1f}%) est sain.",
-                    'suggestions': [
+                    'actions': [
                         "Continuez à suivre vos coûts mensuellement",
                         "Identifiez de nouvelles opportunités d'optimisation"
                     ]
@@ -1169,9 +1588,9 @@ else:
                 
                 recommendations.append({
                     'priority': '🟡 MOYENNE',
-                    'action': 'Capitaliser sur vos best-sellers',
+                    'title': 'Capitaliser sur vos best-sellers',
                     'detail': f"{len(top_3)} produit(s) génèrent une part importante de votre CA.",
-                    'suggestions': suggestions
+                    'actions': suggestions
                 })
                 
                 # Recommandation 3 : Produits sous-performants
@@ -1179,9 +1598,9 @@ else:
                 if len(low_performers) > 0:
                     recommendations.append({
                         'priority': '🟡 MOYENNE',
-                        'action': 'Optimiser les produits sous-performants',
+                        'title': 'Optimiser les produits sous-performants',
                         'detail': f"{len(low_performers)} produits ont moins de 2 ventes.",
-                        'suggestions': [
+                        'actions': [
                             "Améliorez leurs photos (5 photos minimum, fond blanc)",
                             "Optimisez les titres avec des mots-clés recherchés",
                             "Testez une baisse de prix temporaire (-20%)",
@@ -1193,9 +1612,9 @@ else:
             if kpis['panier_moyen'] < 30:
                 recommendations.append({
                     'priority': '🟡 MOYENNE',
-                    'action': 'Augmenter votre panier moyen',
+                    'title': 'Augmenter votre panier moyen',
                     'detail': f"Votre panier moyen est de {kpis['panier_moyen']:.2f}€. Objectif : 35-40€.",
-                    'suggestions': [
+                    'actions': [
                         "Créez des offres bundles (Ex: 'Parure complète -15%')",
                         "Proposez la livraison gratuite à partir de 40€",
                         "Ajoutez des produits complémentaires (boîtes cadeaux, pochettes)",
@@ -1203,65 +1622,179 @@ else:
                     ]
                 })
             
-            # Affichage des recommandations
-            for i, rec in enumerate(recommendations, 1):
-                with st.expander(f"**{rec['priority']}** - {rec['action']}", expanded=(i==1)):
-                    st.markdown(f"**{rec['detail']}**")
-                    st.markdown("**Actions recommandées :**")
-                    for suggestion in rec['suggestions']:
-                        st.markdown(f"- {suggestion}")
-            
-            st.markdown("---")
-            
-            # Prévision simple (moyenne mobile)
+            # Recommandation 5 : Prévision
             if 'Date' in df.columns and len(df) > 7:
-                st.markdown("### 📊 Prévision des ventes")
-                
                 daily_sales = df.groupby(df['Date'].dt.date)['Price'].sum()
                 moving_avg_7 = daily_sales.rolling(window=7).mean().iloc[-1]
-                
                 next_month_prediction = moving_avg_7 * 30
                 
-                col1, col2 = st.columns(2)
+                recommendations.append({
+                    'priority': '🟢 INFO',
+                    'title': 'Prévisions de ventes',
+                    'detail': f"CA prévu sur 30 jours : {next_month_prediction:.2f}€",
+                    'actions': [
+                        f"Préparez du stock en conséquence",
+                        f"Marge prévue estimée : {next_month_prediction * kpis['taux_marge'] / 100:.2f}€",
+                        "Ajustez votre stratégie marketing pour atteindre cet objectif"
+                    ]
+                })
+            
+            # MODE GRATUIT vs PAYANT
+            if not has_insights:
+                st.info("""
+                🎁 **1 recommandation gratuite débloquée**  
+                💎 **4 recommandations premium disponibles avec Insights 9€/mois**
+                """)
                 
-                with col1:
-                    st.metric(
-                        "CA prévu sur 30 jours",
-                        f"{next_month_prediction:.2f} €",
-                        delta=f"{(next_month_prediction - kpis['ca_total']) / kpis['ca_total'] * 100:.1f}%"
-                    )
+                # Afficher la MEILLEURE recommandation (priorité HAUTE)
+                best_rec = None
+                for rec in recommendations:
+                    if rec['priority'] == '🔴 HAUTE':
+                        best_rec = rec
+                        break
                 
-                with col2:
-                    st.metric(
-                        "Marge prévue (estimation)",
-                        f"{next_month_prediction * kpis['taux_marge'] / 100:.2f} €"
-                    )
+                if best_rec is None and recommendations:
+                    best_rec = recommendations[0]
                 
-                st.info("💡 Cette prévision est basée sur la moyenne mobile des 7 derniers jours. Ajustez votre stock en conséquence !")
+                if best_rec:
+                    with st.expander(f"✅ {best_rec['priority']} - {best_rec['title']}", expanded=True):
+                        st.markdown(f"**{best_rec['detail']}**")
+                        
+                        # BENCHMARK
+                        if 'taux_marge' in kpis:
+                            st.markdown("---")
+                            st.markdown("**📊 Benchmark sectoriel**")
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Votre marge", f"{kpis['taux_marge']:.1f}%")
+                            with col2:
+                                st.metric("Moyenne secteur", "37%", 
+                                         delta=f"{37 - kpis['taux_marge']:.1f}%")
+                            with col3:
+                                st.metric("Top performers", "42%")
+                        
+                        st.markdown("---")
+                        st.markdown("**📋 Actions recommandées :**")
+                        for action in best_rec['actions']:
+                            st.markdown(f"- {action}")
+                        
+                        # CALCULATEUR D'IMPACT
+                        st.markdown("---")
+                        st.markdown("**💰 Calculateur d'impact**")
+                        
+                        current_margin = kpis['taux_marge']
+                        target_margin = st.slider("Objectif marge (%)", 
+                                                 int(current_margin), 50, 37)
+                        
+                        margin_gain = target_margin - current_margin
+                        revenue_impact = kpis['ca_total'] * (margin_gain / 100)
+                        
+                        st.success(f"""
+                        Si vous atteignez {target_margin}% de marge :
+                        - Gain : +{margin_gain:.1f} points de marge
+                        - Impact mensuel : +{revenue_impact:.0f}€
+                        """)
+                
+                # Afficher les autres LOCKÉES
+                st.markdown("---")
+                st.markdown("### 🔒 Recommandations Premium")
+                
+                locked_recs = [r for r in recommendations if r != best_rec][:4]
+                
+                for rec in locked_recs:
+                    show_locked_recommendation(rec['title'], rec['priority'])
+                
+                # CTA UPGRADE
+                st.markdown("---")
+                show_insights_upgrade_cta()
+            
+            else:
+                # MODE PAYANT : Toutes les recommandations
+                st.success("💎 **Insights Premium activé** - Toutes les recommandations débloquées")
+                
+                for i, rec in enumerate(recommendations, 1):
+                    with st.expander(f"{rec['priority']} - {rec['title']}", expanded=(i==1)):
+                        st.markdown(f"**{rec['detail']}**")
+                        
+                        # Ajouter benchmarks pour chaque
+                        if 'taux_marge' in kpis and 'marge' in rec['title'].lower():
+                            st.markdown("---")
+                            st.markdown("**📊 Benchmark sectoriel**")
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Votre marge", f"{kpis['taux_marge']:.1f}%")
+                            with col2:
+                                st.metric("Moyenne secteur", "37%", 
+                                         delta=f"{37 - kpis['taux_marge']:.1f}%")
+                            with col3:
+                                st.metric("Top performers", "42%")
+                        
+                        st.markdown("---")
+                        st.markdown("**📋 Actions recommandées :**")
+                        for action in rec['actions']:
+                            st.markdown(f"- {action}")
+                
+                # Checklist
+                st.markdown("---")
+                st.markdown("### ✅ Checklist d'Optimisation Financière")
+                
+                checklist = [
+                    "Tous mes titres font entre 100-140 caractères",
+                    "J'utilise les 13 tags sur chaque listing",
+                    "Chaque listing a au moins 7 photos",
+                    "Mes titres contiennent des mots-clés recherchés",
+                    "J'ai optimisé les 5 listings avec le score SEO le plus faible",
+                    "Mes photos ont un fond blanc/neutre",
+                    "J'ai testé différents mots-clés",
+                    "Je renouvelle régulièrement mes listings",
+                    "J'analyse mes concurrents best-sellers",
+                    "J'ai une stratégie de pricing cohérente"
+                ]
+                
+                for item in checklist:
+                    st.checkbox(item)
         
+        
+        # ========== EXPORT PDF (PREMIUM ONLY) ==========
         # Bouton d'export PDF
         st.markdown("---")
         st.markdown("## 📄 Exporter le rapport")
-        
-        if st.button("🔥 Générer le rapport PDF", type="primary", width='stretch'):
-            with st.spinner("Génération du rapport en cours..."):
-                pdf_buffer = generate_pdf_report(kpis, df, product_analysis)
-                
-                st.download_button(
-                    label="⬇️ Télécharger le rapport PDF",
-                    data=pdf_buffer,
-                    file_name=f"rapport_etsy_{datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    width='stretch'
-                )
-                
-                st.success("✅ Rapport généré avec succès !")
+
+        # Vérifier abonnement Insights
+        has_insights = has_insights_subscription(customer_id)
+
+        if not has_insights:
+            # MODE GRATUIT : Bloquer l'export
+            st.warning("🔒 **Export PDF réservé aux abonnés Insights Premium**")
+            
+            # Bouton blurré
+            st.markdown("""
+            <div style='filter: blur(3px); pointer-events: none;'>
+            """, unsafe_allow_html=True)
+            st.button("📥 Générer le rapport PDF", type="primary", use_container_width=True, disabled=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        else:
+            # MODE PAYANT : Export disponible
+            if st.button("📥 Générer le rapport PDF", type="primary", use_container_width=True):
+                with st.spinner("Génération du rapport en cours..."):
+                    pdf_buffer = generate_pdf_report(kpis, df, product_analysis)
+                    
+                    st.download_button(
+                        label="⬇️ Télécharger le rapport PDF",
+                        data=pdf_buffer,
+                        file_name=f"rapport_etsy_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                    
+                    st.success("✅ Rapport généré avec succès !")
 
 # Footer
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p><strong>Etsy Analytics Pro</strong> - Version 2.0 (Frais Etsy détaillés)</p>
+    <p><strong>Etsy Analytics Pro</strong> - Version 2.0 (Freemium)</p>
     <p>💎 Optimisez votre boutique Etsy de bijoux fantaisie</p>
     <p style='font-size: 0.9em;'>Besoin d'aide ? contact@etsy-analytics.com</p>
 </div>
