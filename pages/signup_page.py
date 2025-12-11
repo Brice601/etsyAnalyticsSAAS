@@ -16,9 +16,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Styles CSS personnalisés
+# Masquer navigation Streamlit
 st.markdown("""
     <style>
+    [data-testid="stSidebarNav"] {display: none !important;}
+    [data-testid="collapsedControl"] {display: none !important;}
+    
     .main-header {
         font-size: 3rem;
         font-weight: bold;
@@ -186,16 +189,16 @@ with st.form("signup_form"):
     
     # Email
     email = st.text_input(
-        "📧 Email pro*",
+        "📧 Email*",
         placeholder="votre.email@example.com",
         help="Nous utiliserons cet email pour vous contacter et vous envoyer vos analyses"
     )
     
     # Nom de la boutique
     shop_name = st.text_input(
-        "🏪 Nom de votre boutique Etsy *",
+        "🏪 Nom de votre boutique Etsy*",
         placeholder="MaBoutiqueEtsy",
-        help="Le nom exact de votre boutique sur Etsy (nous pourrons vérifier son activité)"
+        help="Le nom exact de votre boutique sur Etsy"
     )
     
     st.markdown("---")
@@ -276,7 +279,8 @@ with st.form("signup_form"):
                 <div class="warning-box">
                     <strong>⚠️ Consentement obligatoire</strong><br>
                     Sans consentement, nous ne pouvons pas vous offrir l'accès gratuit.<br>
-                    Si vous ne souhaitez pas partager vos données, d'autres outils payants existent.
+                    <br>
+                    <strong>Alternative :</strong> Insights Premium (9€/mois) ne nécessite pas de collecte de données.
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -327,69 +331,21 @@ with st.form("signup_form"):
                     </a>
                     """, unsafe_allow_html=True)
 
-# ========== ALTERNATIVE ==========
+# ========== DÉJÀ CLIENT ==========
 st.markdown("---")
-st.markdown("### 🔐 Vous avez déjà un compte ?")
-
-col1, col2 = st.columns([3, 1])
-
-with col1:
-    login_email = st.text_input(
-        "Entrez votre email pro",
-        placeholder="votre.email@example.com",
-        key="login_email"
-    )
-
-with col2:
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔑 Se connecter", use_container_width=True):
-        if login_email and validate_email(login_email):
-            supabase = get_supabase_client()
-            
-            if supabase:
-                try:
-                    response = supabase.table('customers').select('*').eq('email', login_email.lower().strip()).execute()
-                    
-                    if response.data and len(response.data) > 0:
-                        customer = response.data[0]
-                        
-                        # Vérifier consentement
-                        if not customer.get('data_consent', False):
-                            st.error("""
-                            ❌ Votre compte n'a pas donné son consentement de données.
-                            
-                            Pour réactiver votre compte, vous devez accepter la collecte de données.
-                            """)
-                        else:
-                            st.session_state['access_key'] = customer['access_key']
-                            st.session_state['user_info'] = customer
-                            
-                            st.success("✅ Connexion réussie ! Redirection...")
-                            
-                            st.markdown(f"""
-                            <script>
-                                setTimeout(function() {{
-                                    window.location.href = "/dashboard?key={customer['access_key']}";
-                                }}, 1500);
-                            </script>
-                            """, unsafe_allow_html=True)
-                            
-                            st.markdown(f"""
-                            <a href="/dashboard?key={customer['access_key']}" target="_self" 
-                               style="display: block; background: #007bff; color: white; 
-                                      padding: 15px; border-radius: 10px; text-align: center; 
-                                      font-weight: bold; text-decoration: none; margin-top: 20px;">
-                                ➡️ Accéder à mon tableau de bord
-                            </a>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.error("❌ Aucun compte trouvé avec cet email")
-                        st.info("💡 Créez un compte ci-dessus si vous êtes nouveau")
-                
-                except Exception as e:
-                    st.error(f"❌ Erreur de connexion : {e}")
-        else:
-            st.error("❌ Email invalide")
+st.markdown("""
+    <div style='text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 10px;'>
+        <p style='font-size: 1.1rem; margin-bottom: 1rem; color: #666;'>
+            Vous avez déjà un compte ?
+        </p>
+        <a href="/dashboard" target="_self" 
+           style="display: inline-block; background: #007bff; color: white; 
+                  padding: 12px 30px; border-radius: 10px; text-align: center; 
+                  font-weight: bold; text-decoration: none; font-size: 1rem;">
+            🔑 Se connecter
+        </a>
+    </div>
+""", unsafe_allow_html=True)
 
 # ========== FAQ ==========
 st.markdown("---")
@@ -434,14 +390,11 @@ with st.expander("💰 Pourquoi c'est gratuit ?"):
 
 with st.expander("🔄 Puis-je retirer mon consentement ?"):
     st.markdown("""
-    **Non, pas pour le moment.**
+    **Le consentement est obligatoire** pour utiliser la version gratuite. 
     
-    Le consentement est obligatoire pour utiliser la version gratuite. 
+    Si vous retirez votre consentement, vous perdrez l'accès à l'outil gratuit.
     
-    Si vous retirez votre consentement, vous perdrez l'accès à l'outil.
-    
-    **Alternative :** Passez à Insights Premium (9€/mois) qui ne nécessite pas de collecte de données 
-    (nous pouvons supprimer cette exigence car vous payez pour le service).
+    **Alternative :** Passez à Insights Premium (9€/mois) qui ne nécessite pas de collecte de données.
     """)
 
 with st.expander("⏱️ Pourquoi limiter à 10 analyses/semaine ?"):
@@ -455,6 +408,16 @@ with st.expander("⏱️ Pourquoi limiter à 10 analyses/semaine ?"):
     
     Si vous avez besoin de plus, **Insights Premium (9€/mois)** offre des analyses illimitées.
     """)
+
+# ========== RETOUR LANDING ==========
+st.markdown("---")
+st.markdown("""
+    <div style='text-align: center; margin-top: 2rem;'>
+        <a href="/" target="_self" style="color: #666; text-decoration: none; font-size: 0.95rem;">
+            ← Retour à l'accueil
+        </a>
+    </div>
+""", unsafe_allow_html=True)
 
 # ========== FOOTER ==========
 st.markdown("---")

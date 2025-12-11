@@ -42,6 +42,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Juste après st.set_page_config()
+st.markdown("""
+    <style>
+    [data-testid="stSidebarNav"] {display: none !important;}
+    [data-testid="collapsedControl"] {display: none !important;}
+    </style>
+""", unsafe_allow_html=True)
+
 # ========== NOUVEAU : VÉRIFICATION D'ACCÈS ==========
 user_info = check_access()
 

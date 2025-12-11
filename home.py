@@ -12,14 +12,32 @@ st.set_page_config(
     }
 )
 
-# ✅ AJOUTER CETTE LIGNE pour cacher le menu Streamlit
+# ✅ Masquer le menu Streamlit
 st.markdown("""
     <style>
-    /* Masquer le menu de navigation Streamlit */
-    [data-testid="stSidebarNav"] {display: none;}
-    section[data-testid="stSidebar"] {display: none;}
+    [data-testid="stSidebarNav"] {display: none !important;}
+    section[data-testid="stSidebar"] {display: none !important;}
+    [data-testid="collapsedControl"] {display: none !important;}
     </style>
 """, unsafe_allow_html=True)
+
+# ✅ NOUVEAU : Redirection automatique si déjà connecté
+if 'access_key' in st.session_state and st.session_state.get('access_key'):
+    st.markdown(f"""
+    <meta http-equiv="refresh" content="0;url=/dashboard?key={st.session_state['access_key']}">
+    """, unsafe_allow_html=True)
+    st.info("🔄 Redirection vers votre tableau de bord...")
+    st.stop()
+
+# Vérifier dans les query params aussi
+params = st.query_params
+if 'key' in params:
+    access_key = params['key']
+    st.markdown(f"""
+    <meta http-equiv="refresh" content="0;url=/dashboard?key={access_key}">
+    """, unsafe_allow_html=True)
+    st.info("🔄 Redirection vers votre tableau de bord...")
+    st.stop()
 
 # Meta tags SEO
 st.markdown("""
@@ -34,7 +52,6 @@ st.markdown("""
     <style>
     /* Reset */
     .main > div {padding-top: 0rem; padding-bottom: 0rem;}
-    section[data-testid="stSidebar"] {display: none;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -318,6 +335,9 @@ st.markdown("""
         <h1 class="hero-title">Analyse ta boutique Etsy en 30 secondes</h1>
         <p class="hero-subtitle">3 dashboards gratuits pour comprendre tes marges, tes clients et ton SEO</p>
         <a href="/signup_page" class="hero-cta">Analyser gratuitement</a>
+        <p style='margin-top: 1.5rem; font-size: 1rem; opacity: 0.9;'>
+            Déjà client ? <a href="/dashboard" style='color: white; text-decoration: underline;'>Se connecter</a>
+        </p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -397,7 +417,7 @@ with col1:
                 <li>Visualisations interactives</li>
                 <li>Calcul automatique des marges</li>
             </ul>
-            <a href="./signup_page" class="pricing-cta secondary">Commencer gratuitement</a>
+            <a href="/signup_page" class="pricing-cta secondary">Commencer gratuitement</a>
         </div>
     """, unsafe_allow_html=True)
 
@@ -595,7 +615,8 @@ st.markdown("""
         </p>
         <p style='margin-bottom: 1rem;'>
             <a href="https://www.youtube.com/@architecteIA" target="_blank">YouTube</a> • 
-            <a href="mailto:support@architecte-ia.fr">Support Email</a>
+            <a href="mailto:support@architecte-ia.fr">Support Email</a> •
+            <a href="/dashboard">Connexion</a>
         </p>
         <p style='font-size: 0.9rem; opacity: 0.8;'>
             <a href="https://architecte-ia.fr/cgu">CGU</a> • 

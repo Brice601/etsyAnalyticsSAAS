@@ -6,18 +6,147 @@ from datetime import datetime, timedelta
 # Ajouter le chemin pour les imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-try:
-    from auth.access_manager import (
-        check_access, 
-        has_insights_subscription,
-        check_usage_limit,
-        PURCHASE_LINKS
-    )
-except ImportError as e:
-    st.error(f"❌ Erreur d'import : {e}")
+# Configuration de la page
+st.set_page_config(
+    page_title="Etsy Analytics Pro - Connexion",
+    page_icon="🏠",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
+
+# Masquer navigation Streamlit
+st.markdown("""
+    <style>
+    [data-testid="stSidebarNav"] {display: none !important;}
+    section[data-testid="stSidebar"] {display: none !important;}
+    [data-testid="collapsedControl"] {display: none !important;}
+    
+    /* Styles pour la page de connexion */
+    .login-container {
+        max-width: 500px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    .login-title {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #F56400;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .login-subtitle {
+        font-size: 1.2rem;
+        color: #666;
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ========== VÉRIFICATION CONNEXION ==========
+params = st.query_params
+
+# Si pas de clé dans l'URL ET pas dans session_state → Afficher formulaire de connexion
+if 'key' not in params and 'access_key' not in st.session_state:
+    
+    st.markdown('<p class="login-title">🔐 Connexion</p>', unsafe_allow_html=True)
+    st.markdown('<p class="login-subtitle">Accédez à votre tableau de bord Etsy Analytics Pro</p>', unsafe_allow_html=True)
+    
+    # Formulaire de connexion
+    with st.form("login_form"):
+        email = st.text_input(
+            "📧 Votre email",
+            placeholder="votre.email@example.com",
+            help="Entrez l'email utilisé lors de votre inscription"
+        )
+        
+        submitted = st.form_submit_button("🚀 Me connecter", type="primary", use_container_width=True)
+        
+        if submitted:
+            if not email or not email.strip():
+                st.error("❌ Veuillez entrer votre email")
+            else:
+                try:
+                    from auth.access_manager import get_supabase_client
+                    
+                    supabase = get_supabase_client()
+                    
+                    if supabase:
+                        with st.spinner("🔄 Connexion en cours..."):
+                            response = supabase.table('customers').select('*').eq('email', email.lower().strip()).execute()
+                            
+                            if response.data and len(response.data) > 0:
+                                customer = response.data[0]
+                                
+                                # Vérifier consentement
+                                if not customer.get('data_consent', False):
+                                    st.error("""
+                                    ❌ **Accès refusé**
+                                    
+                                    Votre compte n'a pas donné son consentement de données.
+                                    
+                                    Contactez-nous à support@architecte-ia.fr pour réactiver votre compte.
+                                    """)
+                                else:
+                                    # Connexion réussie
+                                    st.session_state['access_key'] = customer['access_key']
+                                    st.session_state['user_info'] = customer
+                                    
+                                    st.success("✅ Connexion réussie ! Chargement du tableau de bord...")
+                                    
+                                    st.markdown(f"""
+                                    <meta http-equiv="refresh" content="1;url=/dashboard?key={customer['access_key']}">
+                                    """, unsafe_allow_html=True)
+                                    
+                                    st.stop()
+                            else:
+                                st.error("❌ Aucun compte trouvé avec cet email")
+                                st.info("💡 Vous n'avez pas encore de compte ? Créez-en un ci-dessous")
+                    else:
+                        st.error("❌ Erreur de connexion à la base de données")
+                        
+                except Exception as e:
+                    st.error(f"❌ Erreur de connexion : {e}")
+    
+    st.markdown("---")
+    
+    # Lien vers inscription
+    st.markdown("""
+        <div style='text-align: center; padding: 2rem;'>
+            <p style='font-size: 1.1rem; margin-bottom: 1rem; color: #666;'>
+                Pas encore de compte ?
+            </p>
+            <a href="/signup_page" target="_self" 
+               style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                      color: white; padding: 15px 40px; border-radius: 10px; text-align: center; 
+                      font-weight: bold; text-decoration: none; font-size: 1.1rem;
+                      box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s ease;">
+                📝 Créer un compte gratuit
+            </a>
+            <p style='margin-top: 1rem; font-size: 0.9rem; color: #999;'>
+                ✨ 3 dashboards gratuits • Inscription en 30 secondes
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Retour à la landing
+    st.markdown("""
+        <div style='text-align: center; margin-top: 3rem;'>
+            <a href="/" target="_self" style="color: #666; text-decoration: none; font-size: 0.95rem;">
+                ← Retour à l'accueil
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
+    
     st.stop()
 
-# Configuration de la page
+# Si clé dans URL, la mettre dans session_state
+if 'key' in params:
+    st.session_state['access_key'] = params['key']
+
+# ========== À PARTIR D'ICI : CODE DASHBOARD NORMAL ==========
+
+# Configuration pour le dashboard (après connexion réussie)
 st.set_page_config(
     page_title="Etsy Analytics Pro - Hub",
     page_icon="🏠",
@@ -25,9 +154,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Styles CSS personnalisés
+# Masquer navigation dans le dashboard aussi
 st.markdown("""
     <style>
+    [data-testid="stSidebarNav"] {display: none !important;}
+    [data-testid="collapsedControl"] {display: none !important;}
+    
     .main-header {
         font-size: 3.5rem;
         font-weight: bold;
@@ -141,6 +273,17 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+try:
+    from auth.access_manager import (
+        check_access, 
+        has_insights_subscription,
+        check_usage_limit,
+        PURCHASE_LINKS
+    )
+except ImportError as e:
+    st.error(f"❌ Erreur d'import : {e}")
+    st.stop()
 
 # ========== VÉRIFICATION D'ACCÈS ==========
 user_info = check_access()
@@ -463,6 +606,23 @@ with col3:
     
     FAQ et guides
     """)
+
+# ========== DÉCONNEXION ==========
+st.markdown("---")
+col1, col2, col3 = st.columns([2, 1, 2])
+
+with col2:
+    if st.button("🚪 Se déconnecter", use_container_width=True):
+        # Vider la session
+        st.session_state.clear()
+        
+        st.success("✅ Déconnexion réussie !")
+        
+        st.markdown("""
+        <meta http-equiv="refresh" content="1;url=/dashboard">
+        """, unsafe_allow_html=True)
+        
+        st.stop()
 
 # ========== FOOTER ==========
 st.markdown("---")
