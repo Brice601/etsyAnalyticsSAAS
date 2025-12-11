@@ -32,6 +32,7 @@ st.markdown("""
     <style>
     /* Masquer les pages home, dashboard et signup dans la navigation */
     [data-testid="stSidebarNav"] li:has(a[href*="home"]),
+    [data-testid="stSidebarNav"] li:has(a[href*="dashboard"]),
     [data-testid="stSidebarNav"] li:has(a[href*="signup"]) {
         display: none !important;
     }
