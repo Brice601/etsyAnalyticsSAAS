@@ -12,6 +12,15 @@ st.set_page_config(
     }
 )
 
+# ✅ AJOUTER CETTE LIGNE pour cacher le menu Streamlit
+st.markdown("""
+    <style>
+    /* Masquer le menu de navigation Streamlit */
+    [data-testid="stSidebarNav"] {display: none;}
+    section[data-testid="stSidebar"] {display: none;}
+    </style>
+""", unsafe_allow_html=True)
+
 # Meta tags SEO
 st.markdown("""
     <meta name="description" content="Découvre enfin ta vraie rentabilité produit par produit sur Etsy. 3 dashboards gratuits : Finance Pro, Customer Intelligence, SEO Analyzer.">
